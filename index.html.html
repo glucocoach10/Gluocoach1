@@ -1,0 +1,655 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GlucoCoach — Tu coach de diabetes con IA</title>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,400;0,600;0,700;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f5f0e8;
+    --surface: #fffdf8;
+    --border: #e0d8c8;
+    --accent: #1a6b3c;
+    --accent-light: #e8f5ed;
+    --accent2: #c84b1f;
+    --text: #1c1a16;
+    --muted: #7a7060;
+    --bubble-user: #1a6b3c;
+    --bubble-ai: #ffffff;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Header */
+  header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 0 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 60px;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .logo-icon {
+    width: 34px;
+    height: 34px;
+    background: var(--accent);
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+  }
+
+  .logo-text {
+    font-family: 'Fraunces', serif;
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--accent);
+  }
+
+  .logo-sub {
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+
+  .header-badge {
+    background: var(--accent-light);
+    color: var(--accent);
+    font-size: 11px;
+    font-weight: 500;
+    padding: 4px 12px;
+    border-radius: 20px;
+    border: 1px solid #b8dfc6;
+  }
+
+  /* Layout */
+  .layout {
+    display: flex;
+    flex: 1;
+    max-width: 1000px;
+    width: 100%;
+    margin: 0 auto;
+    gap: 0;
+  }
+
+  /* Sidebar */
+  .sidebar {
+    width: 240px;
+    flex-shrink: 0;
+    padding: 20px 16px;
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .sidebar-label {
+    font-size: 10px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--muted);
+    padding: 4px 8px;
+    margin-top: 8px;
+  }
+
+  .topic-btn {
+    background: none;
+    border: 1px solid transparent;
+    border-radius: 10px;
+    padding: 10px 12px;
+    text-align: left;
+    cursor: pointer;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px;
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    transition: all 0.2s;
+  }
+
+  .topic-btn:hover {
+    background: var(--accent-light);
+    border-color: #b8dfc6;
+    color: var(--accent);
+  }
+
+  .topic-btn.active {
+    background: var(--accent-light);
+    border-color: #b8dfc6;
+    color: var(--accent);
+    font-weight: 500;
+  }
+
+  .topic-icon {
+    font-size: 18px;
+    width: 24px;
+    text-align: center;
+    flex-shrink: 0;
+  }
+
+  /* Stats card in sidebar */
+  .stats-card {
+    background: var(--accent);
+    border-radius: 14px;
+    padding: 16px;
+    color: white;
+    margin-top: auto;
+  }
+
+  .stats-card-title {
+    font-size: 11px;
+    opacity: 0.7;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+
+  .glucose-display {
+    font-family: 'Fraunces', serif;
+    font-size: 36px;
+    font-weight: 700;
+    line-height: 1;
+    margin-bottom: 4px;
+  }
+
+  .glucose-unit {
+    font-size: 12px;
+    opacity: 0.7;
+  }
+
+  .glucose-status {
+    margin-top: 8px;
+    font-size: 12px;
+    background: rgba(255,255,255,0.2);
+    padding: 4px 10px;
+    border-radius: 20px;
+    display: inline-block;
+  }
+
+  /* Chat area */
+  .chat-area {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+
+  .topic-header {
+    padding: 16px 24px 12px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+  }
+
+  .topic-header h2 {
+    font-family: 'Fraunces', serif;
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 2px;
+  }
+
+  .topic-header p {
+    font-size: 12px;
+    color: var(--muted);
+  }
+
+  .messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    min-height: 380px;
+    max-height: 420px;
+  }
+
+  .message {
+    display: flex;
+    gap: 10px;
+    animation: msgIn 0.3s ease both;
+  }
+
+  @keyframes msgIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .message.user {
+    flex-direction: row-reverse;
+  }
+
+  .avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    font-weight: 600;
+  }
+
+  .avatar.ai {
+    background: var(--accent);
+    color: white;
+    font-family: 'Fraunces', serif;
+    font-size: 13px;
+  }
+
+  .avatar.user {
+    background: #e0d8c8;
+    color: var(--muted);
+    font-size: 16px;
+  }
+
+  .bubble {
+    max-width: 75%;
+    padding: 12px 16px;
+    border-radius: 16px;
+    font-size: 14px;
+    line-height: 1.6;
+  }
+
+  .message.ai .bubble {
+    background: var(--bubble-ai);
+    border: 1px solid var(--border);
+    border-radius: 4px 16px 16px 16px;
+    color: var(--text);
+  }
+
+  .message.user .bubble {
+    background: var(--bubble-user);
+    color: white;
+    border-radius: 16px 4px 16px 16px;
+  }
+
+  .typing {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 14px 16px;
+  }
+
+  .dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--muted);
+    animation: bounce 1.2s infinite;
+  }
+
+  .dot:nth-child(2) { animation-delay: 0.2s; }
+  .dot:nth-child(3) { animation-delay: 0.4s; }
+
+  @keyframes bounce {
+    0%, 60%, 100% { transform: translateY(0); }
+    30% { transform: translateY(-6px); }
+  }
+
+  /* Quick prompts */
+  .quick-prompts {
+    padding: 12px 24px;
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    border-top: 1px solid var(--border);
+    background: var(--surface);
+  }
+
+  .quick-btn {
+    background: var(--accent-light);
+    border: 1px solid #b8dfc6;
+    border-radius: 20px;
+    padding: 6px 14px;
+    font-size: 12px;
+    color: var(--accent);
+    cursor: pointer;
+    font-family: 'DM Sans', sans-serif;
+    transition: all 0.2s;
+  }
+
+  .quick-btn:hover {
+    background: var(--accent);
+    color: white;
+    border-color: var(--accent);
+  }
+
+  /* Input */
+  .input-area {
+    padding: 16px 24px;
+    border-top: 1px solid var(--border);
+    background: var(--surface);
+    display: flex;
+    gap: 10px;
+    align-items: flex-end;
+  }
+
+  .input-wrap {
+    flex: 1;
+    background: var(--bg);
+    border: 1.5px solid var(--border);
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    padding: 10px 14px;
+    gap: 8px;
+    transition: border-color 0.2s;
+  }
+
+  .input-wrap:focus-within {
+    border-color: var(--accent);
+  }
+
+  textarea {
+    flex: 1;
+    background: none;
+    border: none;
+    outline: none;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px;
+    color: var(--text);
+    resize: none;
+    max-height: 80px;
+    line-height: 1.5;
+  }
+
+  textarea::placeholder { color: var(--muted); }
+
+  .send-btn {
+    width: 40px;
+    height: 40px;
+    background: var(--accent);
+    border: none;
+    border-radius: 12px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    transition: all 0.2s;
+    flex-shrink: 0;
+  }
+
+  .send-btn:hover { background: #145530; transform: scale(1.05); }
+  .send-btn:disabled { background: var(--border); cursor: not-allowed; transform: none; }
+
+  /* Mobile */
+  @media (max-width: 600px) {
+    .sidebar { display: none; }
+    .layout { max-width: 100%; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-icon">🩺</div>
+    <div>
+      <div class="logo-text">GlucoCoach</div>
+      <div class="logo-sub">Tu coach de diabetes</div>
+    </div>
+  </div>
+  <div class="header-badge">IA Activa ✦</div>
+</header>
+
+<div class="layout">
+
+  <!-- Sidebar -->
+  <div class="sidebar">
+    <div class="sidebar-label">Temas</div>
+
+    <button class="topic-btn active" onclick="setTopic(this, 'alimentacion')">
+      <span class="topic-icon">🥗</span> Alimentación
+    </button>
+    <button class="topic-btn" onclick="setTopic(this, 'glucosa')">
+      <span class="topic-icon">📊</span> Control de glucosa
+    </button>
+    <button class="topic-btn" onclick="setTopic(this, 'ejercicio')">
+      <span class="topic-icon">🏃</span> Ejercicio
+    </button>
+    <button class="topic-btn" onclick="setTopic(this, 'medicamentos')">
+      <span class="topic-icon">💊</span> Medicamentos
+    </button>
+    <button class="topic-btn" onclick="setTopic(this, 'emocional')">
+      <span class="topic-icon">🧘</span> Bienestar emocional
+    </button>
+    <button class="topic-btn" onclick="setTopic(this, 'recetas')">
+      <span class="topic-icon">👨‍🍳</span> Recetas saludables
+    </button>
+
+    <div class="stats-card">
+      <div class="stats-card-title">Glucosa actual</div>
+      <div class="glucose-display">118</div>
+      <div class="glucose-unit">mg/dL</div>
+      <div class="glucose-status">✓ En rango normal</div>
+    </div>
+  </div>
+
+  <!-- Chat -->
+  <div class="chat-area">
+    <div class="topic-header">
+      <h2 id="topicTitle">🥗 Alimentación</h2>
+      <p id="topicDesc">Consejos personalizados de nutrición para controlar tu glucosa</p>
+    </div>
+
+    <div class="messages" id="messages">
+      <div class="message ai">
+        <div class="avatar ai">G</div>
+        <div class="bubble">
+          ¡Hola! Soy GlucoCoach, tu asistente de diabetes con inteligencia artificial. 🌿<br><br>
+          Estoy aquí para ayudarte con <strong>alimentación, glucosa, ejercicio, medicamentos</strong> y todo lo relacionado con tu bienestar. Puedes preguntarme lo que quieras — sin juicios, con información clara y práctica.<br><br>
+          ¿En qué te puedo ayudar hoy?
+        </div>
+      </div>
+    </div>
+
+    <div class="quick-prompts" id="quickPrompts">
+      <button class="quick-btn" onclick="sendQuick(this)">¿Qué puedo desayunar?</button>
+      <button class="quick-btn" onclick="sendQuick(this)">¿Puedo comer tortillas?</button>
+      <button class="quick-btn" onclick="sendQuick(this)">Mi glucosa subió a 200</button>
+      <button class="quick-btn" onclick="sendQuick(this)">¿Qué frutas son seguras?</button>
+    </div>
+
+    <div class="input-area">
+      <div class="input-wrap">
+        <textarea id="userInput" placeholder="Escríbeme tu pregunta..." rows="1"
+          onkeydown="if(event.key==='Enter' && !event.shiftKey){event.preventDefault(); sendMessage();}"
+          oninput="this.style.height='auto'; this.style.height=this.scrollHeight+'px'"></textarea>
+      </div>
+      <button class="send-btn" id="sendBtn" onclick="sendMessage()">➤</button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const TOPICS = {
+  alimentacion: {
+    title: '🥗 Alimentación',
+    desc: 'Consejos personalizados de nutrición para controlar tu glucosa',
+    prompts: ['¿Qué puedo desayunar?', '¿Puedo comer tortillas?', '¿Qué frutas son seguras?', 'Menú para la semana'],
+    system: 'Eres GlucoCoach, un coach especializado en alimentación para personas con diabetes. Hablas en español latinoamericano, con calidez y claridad. Das consejos prácticos sobre alimentación, índice glucémico, porciones y alternativas saludables. Siempre recomiendas consultar al médico para decisiones médicas importantes. Usa emojis con moderación. Sé conciso pero útil.'
+  },
+  glucosa: {
+    title: '📊 Control de glucosa',
+    desc: 'Entiende tus niveles y qué hacer cuando cambian',
+    prompts: ['Mi glucosa subió a 200', '¿Cuándo medirme?', 'Glucosa en ayunas alta', '¿Qué es la HbA1c?'],
+    system: 'Eres GlucoCoach, especialista en control glucémico para diabéticos. Explicas en español latinoamericano qué significan los niveles de glucosa, cuándo preocuparse, qué factores los afectan y qué hacer ante hipoglucemia o hiperglucemia. Siempre recomiendas acudir al médico ante emergencias. Usa lenguaje claro, sin tecnicismos innecesarios.'
+  },
+  ejercicio: {
+    title: '🏃 Ejercicio',
+    desc: 'Rutinas seguras y efectivas para diabéticos',
+    prompts: ['¿Puedo hacer ejercicio intenso?', 'Glucosa baja al ejercitarme', 'Rutina para principiantes', '¿Cuándo no debo ejercitarme?'],
+    system: 'Eres GlucoCoach, coach de ejercicio especializado en diabetes. Orientas en español sobre rutinas seguras, cómo monitorear la glucosa antes/durante/después del ejercicio, qué señales de alarma tener en cuenta y cómo adaptar el ejercicio al nivel de cada persona. Eres motivador pero prudente con la seguridad.'
+  },
+  medicamentos: {
+    title: '💊 Medicamentos',
+    desc: 'Información sobre insulina, metformina y más',
+    prompts: ['¿Qué es la metformina?', 'Olvidé tomar mi medicamento', 'Efectos secundarios de insulina', '¿Puedo tomar ibuprofeno?'],
+    system: 'Eres GlucoCoach, asistente informativo sobre medicamentos para diabetes. Explicas en español qué hace cada medicamento común (metformina, insulina, glibenclamida, etc.), efectos secundarios frecuentes y preguntas frecuentes. SIEMPRE aclaras que no puedes reemplazar al médico ni ajustar dosis — tu rol es informar y orientar para mejores conversaciones con el equipo médico.'
+  },
+  emocional: {
+    title: '🧘 Bienestar emocional',
+    desc: 'Apoyo para vivir bien con diabetes',
+    prompts: ['Me siento agobiado con la diabetes', 'No quiero seguir el tratamiento', 'Cómo decirle a mi familia', '¿Es normal sentirme así?'],
+    system: 'Eres GlucoCoach, un coach empático especializado en el aspecto emocional de vivir con diabetes. Hablas con calidez, sin juzgar, validando los sentimientos de la persona. Ofreces perspectivas útiles, estrategias de afrontamiento y recuerdas que no están solos. Para situaciones de salud mental grave siempre sugieres apoyo profesional. Eres como un amigo que entiende.'
+  },
+  recetas: {
+    title: '👨‍🍳 Recetas saludables',
+    desc: 'Comidas deliciosas y aptas para diabéticos',
+    prompts: ['Receta de desayuno rápido', 'Postre sin azúcar', 'Comida mexicana apta', 'Licuado sin elevar glucosa'],
+    system: 'Eres GlucoCoach, chef y nutriólogo especializado en recetas para diabéticos. Propones recetas deliciosas y prácticas en español, con ingredientes fáciles de conseguir en México y Latinoamérica. Explicas por qué cada receta es apta, el impacto glucémico estimado y posibles sustituciones. Haces que comer sano con diabetes sea placentero, no un castigo.'
+  }
+};
+
+let currentTopic = 'alimentacion';
+let conversationHistory = [];
+let isLoading = false;
+
+function setTopic(btn, topic) {
+  document.querySelectorAll('.topic-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  currentTopic = topic;
+
+  const t = TOPICS[topic];
+  document.getElementById('topicTitle').textContent = t.title;
+  document.getElementById('topicDesc').textContent = t.desc;
+
+  const qp = document.getElementById('quickPrompts');
+  qp.innerHTML = t.prompts.map(p => `<button class="quick-btn" onclick="sendQuick(this)">${p}</button>`).join('');
+
+  // Reset conversation
+  conversationHistory = [];
+  const msgs = document.getElementById('messages');
+  msgs.innerHTML = `
+    <div class="message ai">
+      <div class="avatar ai">G</div>
+      <div class="bubble">
+        Cambiamos a <strong>${t.title}</strong>. ¿Qué te gustaría saber sobre este tema?
+      </div>
+    </div>`;
+}
+
+function sendQuick(btn) {
+  document.getElementById('userInput').value = btn.textContent;
+  sendMessage();
+}
+
+function addMessage(role, text) {
+  const msgs = document.getElementById('messages');
+  const div = document.createElement('div');
+  div.className = `message ${role}`;
+
+  const avatar = document.createElement('div');
+  avatar.className = `avatar ${role}`;
+  avatar.textContent = role === 'ai' ? 'G' : '👤';
+
+  const bubble = document.createElement('div');
+  bubble.className = 'bubble';
+  bubble.innerHTML = text.replace(/\n/g, '<br>').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+
+  div.appendChild(avatar);
+  div.appendChild(bubble);
+  msgs.appendChild(div);
+  msgs.scrollTop = msgs.scrollHeight;
+}
+
+function showTyping() {
+  const msgs = document.getElementById('messages');
+  const div = document.createElement('div');
+  div.className = 'message ai';
+  div.id = 'typingIndicator';
+
+  const avatar = document.createElement('div');
+  avatar.className = 'avatar ai';
+  avatar.textContent = 'G';
+
+  const bubble = document.createElement('div');
+  bubble.className = 'bubble typing';
+  bubble.innerHTML = '<div class="dot"></div><div class="dot"></div><div class="dot"></div>';
+
+  div.appendChild(avatar);
+  div.appendChild(bubble);
+  msgs.appendChild(div);
+  msgs.scrollTop = msgs.scrollHeight;
+}
+
+function removeTyping() {
+  const t = document.getElementById('typingIndicator');
+  if (t) t.remove();
+}
+
+async function sendMessage() {
+  if (isLoading) return;
+  const input = document.getElementById('userInput');
+  const text = input.value.trim();
+  if (!text) return;
+
+  input.value = '';
+  input.style.height = 'auto';
+  isLoading = true;
+  document.getElementById('sendBtn').disabled = true;
+
+  addMessage('user', text);
+  conversationHistory.push({ role: 'user', content: text });
+
+  showTyping();
+
+  try {
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 1000,
+        system: TOPICS[currentTopic].system,
+        messages: conversationHistory
+      })
+    });
+
+    const data = await response.json();
+    const reply = data.content?.map(c => c.text || '').join('') || 'Lo siento, ocurrió un error. Intenta de nuevo.';
+
+    removeTyping();
+    addMessage('ai', reply);
+    conversationHistory.push({ role: 'assistant', content: reply });
+
+  } catch (err) {
+    removeTyping();
+    addMessage('ai', 'Hubo un problema de conexión. Por favor intenta de nuevo en un momento.');
+  }
+
+  isLoading = false;
+  document.getElementById('sendBtn').disabled = false;
+  document.getElementById('userInput').focus();
+}
+</script>
+</body>
+</html>
