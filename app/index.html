@@ -636,7 +636,7 @@ async function sendMessage() {
 
     const data = await response.json();
     const reply = data.content?.map(c => c.text || '').join('') || 'Lo siento, ocurrió un error. Intenta de nuevo.';
- app
+ 
     removeTyping();
     addMessage('ai', reply);
     conversationHistory.push({ role: 'assistant', content: reply });
