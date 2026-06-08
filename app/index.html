@@ -408,10 +408,59 @@
   .send-btn:disabled { background: var(--border); cursor: not-allowed; transform: none; }
 
   /* Mobile */
-  @media (max-width: 600px) {
+@media (max-width: 600px) {
     .sidebar { display: none; }
     .layout { max-width: 100%; }
+    .chat-area { padding-bottom: 70px; }
+
+    .mobile-nav {
+      display: flex !important;
+    }
   }
+
+  .mobile-nav {
+    display: none;
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    padding: 8px 4px;
+    gap: 2px;
+    z-index: 100;
+    justify-content: space-around;
+  }
+
+  .mobile-nav-btn {
+    background: none;
+    border: none;
+    border-radius: 10px;
+    padding: 6px 4px;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    flex: 1;
+    transition: background 0.2s;
+  }
+
+  .mobile-nav-btn.active {
+    background: var(--accent-light);
+  }
+
+  .mobile-nav-btn span:first-child {
+    font-size: 20px;
+  }
+
+  .mobile-nav-btn span:last-child {
+    font-size: 9px;
+    color: var(--muted);
+    font-weight: 500;
+  }
+
+  .mobile-nav-btn.active span:last-child {
+    color: var(--accent);
+  } 
 </style>
 </head>
 <body>
@@ -540,7 +589,13 @@ const TOPICS = {
 let currentTopic = 'alimentacion';
 let conversationHistory = [];
 let isLoading = false;
-
+function setTopicMobile(btn, topic) {
+  document.querySelectorAll('.mobile-nav-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  
+  const sidebarBtn = document.querySelector(`.topic-btn[onclick*="${topic}"]`);
+  if (sidebarBtn) setTopic(sidebarBtn, topic);
+}  
 function setTopic(btn, topic) {
   document.querySelectorAll('.topic-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
@@ -660,7 +715,28 @@ async function sendMessage() {
   document.getElementById('userInput').focus();
 }
  </script>
-<script>
+<!-- Mobile Nav -->
+<div class="mobile-nav" id="mobileNav">
+  <button class="mobile-nav-btn active" onclick="setTopicMobile(this, 'alimentacion')">
+    <span>🥗</span><span>Alimentación</span>
+  </button>
+  <button class="mobile-nav-btn" onclick="setTopicMobile(this, 'glucosa')">
+    <span>📊</span><span>Glucosa</span>
+  </button>
+  <button class="mobile-nav-btn" onclick="setTopicMobile(this, 'ejercicio')">
+    <span>🏃</span><span>Ejercicio</span>
+  </button>
+  <button class="mobile-nav-btn" onclick="setTopicMobile(this, 'medicamentos')">
+    <span>💊</span><span>Medicamentos</span>
+  </button>
+  <button class="mobile-nav-btn" onclick="setTopicMobile(this, 'emocional')">
+    <span>🧘</span><span>Bienestar</span>
+  </button>
+  <button class="mobile-nav-btn" onclick="setTopicMobile(this, 'recetas')">
+    <span>👨‍🍳</span><span>Recetas</span>
+  </button>
+</div>
+  <script>
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('/sw.js');
   }
