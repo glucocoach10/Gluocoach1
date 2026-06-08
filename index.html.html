@@ -1,0 +1,942 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GlucoCoach — Tu coach de diabetes con IA</title>
+<meta name="description" content="El primer coach inteligente para diabéticos en español. Alimentación, glucosa, ejercicio y más. Prueba gratis 7 días.">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,400;0,600;0,700;0,900;1,400;1,600&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f7f3eb;
+    --surface: #fffdf8;
+    --accent: #1a6b3c;
+    --accent-light: #e8f5ed;
+    --accent2: #c84b1f;
+    --text: #1c1a16;
+    --muted: #7a7060;
+    --border: #e0d8c8;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    overflow-x: hidden;
+  }
+
+  /* NAV */
+  nav {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    z-index: 100;
+    background: rgba(247,243,235,0.92);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border);
+    padding: 0 5%;
+    height: 64px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .nav-logo {
+    font-family: 'Fraunces', serif;
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--accent);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    text-decoration: none;
+  }
+
+  .nav-links {
+    display: flex;
+    align-items: center;
+    gap: 28px;
+    list-style: none;
+  }
+
+  .nav-links a {
+    text-decoration: none;
+    font-size: 14px;
+    color: var(--muted);
+    transition: color 0.2s;
+  }
+
+  .nav-links a:hover { color: var(--text); }
+
+  .nav-cta {
+    background: var(--accent);
+    color: white !important;
+    padding: 8px 20px;
+    border-radius: 100px;
+    font-weight: 500;
+    font-size: 14px !important;
+    transition: background 0.2s !important;
+  }
+
+  .nav-cta:hover { background: #145530 !important; }
+
+  /* HERO */
+  .hero {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    padding: 100px 5% 60px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .hero::before {
+    content: '';
+    position: absolute;
+    top: -100px; right: -100px;
+    width: 600px; height: 600px;
+    background: radial-gradient(circle, rgba(26,107,60,0.08) 0%, transparent 70%);
+    pointer-events: none;
+  }
+
+  .hero::after {
+    content: '';
+    position: absolute;
+    bottom: -100px; left: -100px;
+    width: 500px; height: 500px;
+    background: radial-gradient(circle, rgba(200,75,31,0.06) 0%, transparent 70%);
+    pointer-events: none;
+  }
+
+  .hero-inner {
+    max-width: 1100px;
+    margin: 0 auto;
+    width: 100%;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 60px;
+    align-items: center;
+  }
+
+  .hero-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--accent-light);
+    border: 1px solid #b8dfc6;
+    color: var(--accent);
+    font-size: 12px;
+    font-weight: 500;
+    padding: 6px 14px;
+    border-radius: 100px;
+    margin-bottom: 24px;
+    animation: fadeUp 0.6s ease both;
+  }
+
+  .hero h1 {
+    font-family: 'Fraunces', serif;
+    font-size: clamp(38px, 5vw, 58px);
+    font-weight: 900;
+    line-height: 1.05;
+    margin-bottom: 20px;
+    animation: fadeUp 0.6s 0.1s ease both;
+  }
+
+  .hero h1 em {
+    font-style: italic;
+    color: var(--accent);
+  }
+
+  .hero p {
+    font-size: 17px;
+    color: var(--muted);
+    line-height: 1.7;
+    margin-bottom: 36px;
+    font-weight: 300;
+    animation: fadeUp 0.6s 0.2s ease both;
+  }
+
+  .hero-actions {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    animation: fadeUp 0.6s 0.3s ease both;
+  }
+
+  .btn-primary {
+    background: var(--accent);
+    color: white;
+    padding: 14px 28px;
+    border-radius: 100px;
+    font-size: 15px;
+    font-weight: 500;
+    text-decoration: none;
+    transition: all 0.2s;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    border: none;
+    cursor: pointer;
+    font-family: 'DM Sans', sans-serif;
+  }
+
+  .btn-primary:hover { background: #145530; transform: translateY(-2px); box-shadow: 0 8px 24px rgba(26,107,60,0.25); }
+
+  .btn-secondary {
+    background: transparent;
+    color: var(--text);
+    padding: 14px 28px;
+    border-radius: 100px;
+    font-size: 15px;
+    font-weight: 500;
+    text-decoration: none;
+    border: 1.5px solid var(--border);
+    transition: all 0.2s;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .btn-secondary:hover { border-color: var(--accent); color: var(--accent); }
+
+  .hero-trust {
+    margin-top: 28px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 13px;
+    color: var(--muted);
+    animation: fadeUp 0.6s 0.4s ease both;
+  }
+
+  .avatars {
+    display: flex;
+  }
+
+  .av {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: 2px solid var(--bg);
+    margin-left: -6px;
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--accent-light);
+  }
+
+  .av:first-child { margin-left: 0; }
+
+  /* Hero mockup */
+  .hero-visual {
+    animation: fadeUp 0.8s 0.2s ease both;
+  }
+
+  .mockup {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 24px;
+    padding: 20px;
+    box-shadow: 0 24px 60px rgba(0,0,0,0.1);
+  }
+
+  .mockup-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 16px;
+  }
+
+  .mockup-logo {
+    width: 32px; height: 32px;
+    background: var(--accent);
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+  }
+
+  .mockup-title {
+    font-family: 'Fraunces', serif;
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--accent);
+  }
+
+  .mockup-status {
+    margin-left: auto;
+    width: 8px; height: 8px;
+    background: #22c55e;
+    border-radius: 50%;
+  }
+
+  .chat-msg {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+
+  .chat-msg.user { flex-direction: row-reverse; }
+
+  .chat-av {
+    width: 28px; height: 28px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 600;
+  }
+
+  .chat-av.ai { background: var(--accent); color: white; font-family: 'Fraunces', serif; }
+  .chat-av.u { background: #e0d8c8; font-size: 14px; }
+
+  .chat-bub {
+    max-width: 80%;
+    padding: 10px 14px;
+    border-radius: 14px;
+    font-size: 13px;
+    line-height: 1.5;
+  }
+
+  .chat-msg.ai .chat-bub {
+    background: var(--accent-light);
+    border: 1px solid #b8dfc6;
+    border-radius: 4px 14px 14px 14px;
+    color: var(--text);
+  }
+
+  .chat-msg.user .chat-bub {
+    background: var(--accent);
+    color: white;
+    border-radius: 14px 4px 14px 14px;
+  }
+
+  .glucose-pill {
+    background: var(--accent);
+    color: white;
+    border-radius: 12px;
+    padding: 12px 16px;
+    margin-top: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .glucose-pill .label { font-size: 11px; opacity: 0.7; }
+  .glucose-pill .value { font-family: 'Fraunces', serif; font-size: 28px; font-weight: 700; }
+  .glucose-pill .unit { font-size: 11px; opacity: 0.7; }
+  .glucose-pill .status { font-size: 11px; background: rgba(255,255,255,0.2); padding: 3px 10px; border-radius: 20px; }
+
+  /* FEATURES */
+  .section {
+    padding: 80px 5%;
+  }
+
+  .section-inner {
+    max-width: 1100px;
+    margin: 0 auto;
+  }
+
+  .section-tag {
+    display: inline-block;
+    font-size: 11px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--accent);
+    font-weight: 500;
+    margin-bottom: 12px;
+  }
+
+  .section-title {
+    font-family: 'Fraunces', serif;
+    font-size: clamp(28px, 4vw, 42px);
+    font-weight: 700;
+    line-height: 1.15;
+    margin-bottom: 16px;
+  }
+
+  .section-desc {
+    font-size: 16px;
+    color: var(--muted);
+    font-weight: 300;
+    max-width: 500px;
+    line-height: 1.7;
+    margin-bottom: 48px;
+  }
+
+  .features-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 20px;
+  }
+
+  .feature-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 28px;
+    transition: transform 0.3s, box-shadow 0.3s;
+  }
+
+  .feature-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 16px 40px rgba(0,0,0,0.08);
+  }
+
+  .feature-icon {
+    font-size: 32px;
+    margin-bottom: 16px;
+  }
+
+  .feature-title {
+    font-family: 'Fraunces', serif;
+    font-size: 18px;
+    font-weight: 600;
+    margin-bottom: 8px;
+  }
+
+  .feature-desc {
+    font-size: 14px;
+    color: var(--muted);
+    line-height: 1.7;
+    font-weight: 300;
+  }
+
+  /* TESTIMONIALS */
+  .testimonials {
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .testimonials-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 20px;
+  }
+
+  .testimonial {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 24px;
+  }
+
+  .stars { color: #f59e0b; font-size: 14px; margin-bottom: 12px; }
+
+  .testimonial-text {
+    font-size: 14px;
+    line-height: 1.7;
+    color: var(--text);
+    margin-bottom: 16px;
+    font-style: italic;
+    font-family: 'Fraunces', serif;
+    font-weight: 400;
+  }
+
+  .testimonial-author {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .author-av {
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    background: var(--accent-light);
+  }
+
+  .author-name { font-size: 13px; font-weight: 500; }
+  .author-info { font-size: 12px; color: var(--muted); }
+
+  /* PRICING */
+  .pricing-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 20px;
+    max-width: 800px;
+    margin: 0 auto;
+  }
+
+  .pricing-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 24px;
+    padding: 32px;
+    position: relative;
+    transition: transform 0.3s;
+  }
+
+  .pricing-card:hover { transform: translateY(-4px); }
+
+  .pricing-card.featured {
+    background: var(--accent);
+    color: white;
+    border-color: var(--accent);
+  }
+
+  .pricing-badge {
+    position: absolute;
+    top: -12px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--accent2);
+    color: white;
+    font-size: 11px;
+    font-weight: 500;
+    padding: 4px 14px;
+    border-radius: 20px;
+    white-space: nowrap;
+  }
+
+  .pricing-name {
+    font-size: 13px;
+    font-weight: 500;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    margin-bottom: 16px;
+    opacity: 0.7;
+  }
+
+  .pricing-price {
+    font-family: 'Fraunces', serif;
+    font-size: 48px;
+    font-weight: 900;
+    line-height: 1;
+    margin-bottom: 4px;
+  }
+
+  .pricing-period {
+    font-size: 13px;
+    opacity: 0.6;
+    margin-bottom: 24px;
+  }
+
+  .pricing-features {
+    list-style: none;
+    margin-bottom: 28px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .pricing-features li {
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .pricing-features li::before {
+    content: '✓';
+    font-weight: 700;
+    color: var(--accent);
+    flex-shrink: 0;
+  }
+
+  .pricing-card.featured .pricing-features li::before { color: #86efb4; }
+
+  .btn-pricing {
+    display: block;
+    text-align: center;
+    padding: 13px;
+    border-radius: 100px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    text-decoration: none;
+    transition: all 0.2s;
+    font-family: 'DM Sans', sans-serif;
+    border: none;
+  }
+
+  .btn-pricing.outline {
+    background: transparent;
+    border: 1.5px solid var(--border);
+    color: var(--text);
+  }
+
+  .btn-pricing.outline:hover { border-color: var(--accent); color: var(--accent); }
+
+  .btn-pricing.white {
+    background: white;
+    color: var(--accent);
+  }
+
+  .btn-pricing.white:hover { background: #f0faf4; }
+
+  /* FAQ */
+  .faq-list { max-width: 680px; margin: 0 auto; }
+
+  .faq-item {
+    border-bottom: 1px solid var(--border);
+    padding: 20px 0;
+  }
+
+  .faq-q {
+    font-size: 15px;
+    font-weight: 500;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .faq-q::after {
+    content: '+';
+    font-size: 20px;
+    color: var(--accent);
+    flex-shrink: 0;
+    transition: transform 0.2s;
+  }
+
+  .faq-item.open .faq-q::after { transform: rotate(45deg); }
+
+  .faq-a {
+    font-size: 14px;
+    color: var(--muted);
+    line-height: 1.7;
+    margin-top: 12px;
+    display: none;
+    font-weight: 300;
+  }
+
+  .faq-item.open .faq-a { display: block; }
+
+  /* CTA FINAL */
+  .cta-final {
+    background: var(--accent);
+    color: white;
+    text-align: center;
+    padding: 80px 5%;
+  }
+
+  .cta-final h2 {
+    font-family: 'Fraunces', serif;
+    font-size: clamp(28px, 4vw, 44px);
+    font-weight: 700;
+    margin-bottom: 16px;
+    line-height: 1.2;
+  }
+
+  .cta-final p {
+    font-size: 16px;
+    opacity: 0.8;
+    margin-bottom: 32px;
+    font-weight: 300;
+  }
+
+  .btn-white {
+    background: white;
+    color: var(--accent);
+    padding: 14px 32px;
+    border-radius: 100px;
+    font-size: 15px;
+    font-weight: 500;
+    text-decoration: none;
+    transition: all 0.2s;
+    display: inline-block;
+  }
+
+  .btn-white:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,0.2); }
+
+  /* FOOTER */
+  footer {
+    background: var(--text);
+    color: rgba(255,255,255,0.5);
+    text-align: center;
+    padding: 24px;
+    font-size: 13px;
+  }
+
+  footer span { color: white; }
+
+  /* ANIMATIONS */
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* MOBILE */
+  @media (max-width: 700px) {
+    .hero-inner { grid-template-columns: 1fr; gap: 40px; }
+    .hero-visual { order: -1; }
+    .nav-links { display: none; }
+    .hero { padding-top: 80px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <a href="#" class="nav-logo">🩺 GlucoCoach</a>
+  <ul class="nav-links">
+    <li><a href="#funciones">Funciones</a></li>
+    <li><a href="#testimonios">Testimonios</a></li>
+    <li><a href="#precios">Precios</a></li>
+    <li><a href="https://gluocoach1.vercel.app/" class="nav-cta">Probar gratis →</a></li>
+  </ul>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="hero-inner">
+    <div class="hero-content">
+      <div class="hero-tag">✦ Inteligencia Artificial para tu salud</div>
+      <h1>Vive mejor con <em>diabetes</em> — con tu coach de IA</h1>
+      <p>GlucoCoach te acompaña todos los días con consejos personalizados de alimentación, glucosa, ejercicio y más. En español, disponible 24/7.</p>
+      <div class="hero-actions">
+        <a href="https://gluocoach1.vercel.app/" class="btn-primary">Prueba gratis 7 días →</a>
+        <a href="#funciones" class="btn-secondary">Ver funciones</a>
+      </div>
+      <div class="hero-trust">
+        <div class="avatars">
+          <div class="av">👨</div>
+          <div class="av">👩</div>
+          <div class="av">👴</div>
+          <div class="av">👩</div>
+        </div>
+        +500 diabéticos ya usan GlucoCoach · Sin tarjeta para empezar
+      </div>
+    </div>
+
+    <div class="hero-visual">
+      <div class="mockup">
+        <div class="mockup-header">
+          <div class="mockup-logo">🩺</div>
+          <div>
+            <div class="mockup-title">GlucoCoach</div>
+          </div>
+          <div class="mockup-status"></div>
+        </div>
+
+        <div class="chat-msg user">
+          <div class="chat-av u">👤</div>
+          <div class="chat-bub">¿Puedo comer tortillas si tengo diabetes?</div>
+        </div>
+
+        <div class="chat-msg ai">
+          <div class="chat-av ai">G</div>
+          <div class="chat-bub">¡Sí puedes! La clave está en la cantidad y el tipo. Las tortillas de maíz tienen menor índice glucémico que las de harina. Te recomiendo 2 tortillas pequeñas por comida, acompañadas de proteína y verduras para bajar el impacto en tu glucosa. 🌽</div>
+        </div>
+
+        <div class="chat-msg user">
+          <div class="chat-av u">👤</div>
+          <div class="chat-bub">¿Y en la noche cuánto debería tener de glucosa?</div>
+        </div>
+
+        <div class="chat-msg ai">
+          <div class="chat-av ai">G</div>
+          <div class="chat-bub">Lo ideal antes de dormir es entre 100 y 140 mg/dL. Así tu cuerpo descansa bien sin riesgo de hipoglucemia nocturna.</div>
+        </div>
+
+        <div class="glucose-pill">
+          <div>
+            <div class="label">Tu glucosa ahora</div>
+            <div style="display:flex;align-items:baseline;gap:4px">
+              <div class="value">118</div>
+              <div class="unit">mg/dL</div>
+            </div>
+          </div>
+          <div class="status">✓ Normal</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FEATURES -->
+<section class="section" id="funciones">
+  <div class="section-inner">
+    <div class="section-tag">Funciones</div>
+    <h2 class="section-title">Todo lo que necesitas<br>en un solo lugar</h2>
+    <p class="section-desc">GlucoCoach cubre todos los aspectos de vivir bien con diabetes — no solo información, sino acompañamiento real.</p>
+
+    <div class="features-grid">
+      <div class="feature-card">
+        <div class="feature-icon">🥗</div>
+        <div class="feature-title">Alimentación personalizada</div>
+        <p class="feature-desc">Pregunta qué puedes comer, en qué cantidades y cómo combinar tus alimentos para mantener la glucosa estable. Recetas con ingredientes de tu región.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">📊</div>
+        <div class="feature-title">Control de glucosa</div>
+        <p class="feature-desc">Entiende qué significan tus niveles, qué hacer si sube o baja, y cómo interpretar tu HbA1c. Sin tecnicismos, con lenguaje claro.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🏃</div>
+        <div class="feature-title">Ejercicio seguro</div>
+        <p class="feature-desc">Rutinas adaptadas a tu condición. Aprende cuándo no debes ejercitarte, qué hacer si la glucosa baja durante el ejercicio y cómo progresar sin riesgos.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">💊</div>
+        <div class="feature-title">Guía de medicamentos</div>
+        <p class="feature-desc">Información clara sobre metformina, insulina y otros medicamentos comunes. Efectos secundarios, interacciones y preguntas frecuentes explicadas sin rodeos.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🧘</div>
+        <div class="feature-title">Bienestar emocional</div>
+        <p class="feature-desc">Vivir con diabetes es difícil emocionalmente. GlucoCoach te escucha sin juzgar y te da herramientas para manejar el estrés, la frustración y la fatiga.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">👨‍🍳</div>
+        <div class="feature-title">Recetas saludables</div>
+        <p class="feature-desc">Platillos deliciosos y aptos para diabéticos, con ingredientes fáciles de conseguir en México y Latinoamérica. Porque comer sano no debe ser un castigo.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- TESTIMONIALS -->
+<section class="section testimonials" id="testimonios">
+  <div class="section-inner">
+    <div class="section-tag">Testimonios</div>
+    <h2 class="section-title">Lo que dicen<br>nuestros usuarios</h2>
+    <p class="section-desc">Personas reales con diabetes que encontraron en GlucoCoach un aliado de todos los días.</p>
+
+    <div class="testimonials-grid">
+      <div class="testimonial">
+        <div class="stars">★★★★★</div>
+        <p class="testimonial-text">"Por fin alguien que me explica qué puedo comer sin hacerme sentir culpable. Le pregunté sobre las tortillas y me dio una respuesta práctica que realmente puedo aplicar."</p>
+        <div class="testimonial-author">
+          <div class="author-av">👩</div>
+          <div>
+            <div class="author-name">María G.</div>
+            <div class="author-info">Diabética tipo 2 · Guadalajara, México</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="testimonial">
+        <div class="stars">★★★★★</div>
+        <p class="testimonial-text">"Mi glucosa llegó a 280 y no sabía qué hacer. GlucoCoach me explicó paso a paso qué hacer y cuándo llamar al médico. Me dio mucha tranquilidad tener esto disponible."</p>
+        <div class="testimonial-author">
+          <div class="author-av">👨</div>
+          <div>
+            <div class="author-name">Roberto M.</div>
+            <div class="author-info">Diabético tipo 1 · Bogotá, Colombia</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="testimonial">
+        <div class="stars">★★★★★</div>
+        <p class="testimonial-text">"Lo uso para mi mamá que tiene diabetes y no habla bien inglés. Por fin tiene una app en español que le habla como ella entiende. Vale cada peso."</p>
+        <div class="testimonial-author">
+          <div class="author-av">👩</div>
+          <div>
+            <div class="author-name">Claudia R.</div>
+            <div class="author-info">Hija de diabética · Ciudad de México</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- PRICING -->
+<section class="section" id="precios">
+  <div class="section-inner" style="text-align:center">
+    <div class="section-tag">Precios</div>
+    <h2 class="section-title">Simple y sin sorpresas</h2>
+    <p class="section-desc" style="margin: 0 auto 48px;">Empieza gratis. Cancela cuando quieras. Sin compromisos.</p>
+
+    <div class="pricing-grid">
+      <div class="pricing-card">
+        <div class="pricing-name">Gratuito</div>
+        <div class="pricing-price">$0</div>
+        <div class="pricing-period">7 días de prueba</div>
+        <ul class="pricing-features">
+          <li>Acceso completo 7 días</li>
+          <li>Los 6 módulos incluidos</li>
+          <li>Sin tarjeta de crédito</li>
+          <li>Soporte por WhatsApp</li>
+        </ul>
+        <a href="https://gluocoach1.vercel.app/" class="btn-pricing outline">Empezar gratis →</a>
+      </div>
+
+      <div class="pricing-card featured">
+        <div class="pricing-badge">Más popular</div>
+        <div class="pricing-name" style="opacity:0.6">Premium</div>
+        <div class="pricing-price">$9.99</div>
+        <div class="pricing-period">USD por mes · cancela cuando quieras</div>
+        <ul class="pricing-features">
+          <li>Todo del plan gratuito</li>
+          <li>Conversaciones ilimitadas</li>
+          <li>Historial de consultas</li>
+          <li>Acceso en inglés y español</li>
+          <li>Nuevas funciones cada mes</li>
+        </ul>
+        <a href="https://gluocoach1.vercel.app/" class="btn-pricing white">Suscribirme ahora →</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FAQ -->
+<section class="section" style="background: var(--surface); border-top: 1px solid var(--border);">
+  <div class="section-inner" style="text-align:center">
+    <div class="section-tag">FAQ</div>
+    <h2 class="section-title" style="margin-bottom:40px">Preguntas frecuentes</h2>
+
+    <div class="faq-list" style="text-align:left">
+      <div class="faq-item">
+        <div class="faq-q" onclick="toggleFaq(this)">¿GlucoCoach reemplaza a mi médico?</div>
+        <div class="faq-a">No. GlucoCoach es un coach de apoyo que te da información, consejos y acompañamiento. Para diagnósticos, ajuste de medicamentos y decisiones médicas importantes, siempre debes consultar a tu médico. GlucoCoach te ayuda a llegar mejor preparado a esas consultas.</div>
+      </div>
+      <div class="faq-item">
+        <div class="faq-q" onclick="toggleFaq(this)">¿Funciona para diabetes tipo 1 y tipo 2?</div>
+        <div class="faq-a">Sí. GlucoCoach está diseñado para ayudar a personas con diabetes tipo 1, tipo 2 y prediabetes. Puedes indicarle tu tipo de diabetes al inicio de la conversación para recibir consejos más personalizados.</div>
+      </div>
+      <div class="faq-item">
+        <div class="faq-q" onclick="toggleFaq(this)">¿Está disponible en inglés?</div>
+        <div class="faq-a">Sí. GlucoCoach funciona perfectamente en español e inglés. Puedes escribirle en cualquiera de los dos idiomas y te responderá en el mismo idioma que uses.</div>
+      </div>
+      <div class="faq-item">
+        <div class="faq-q" onclick="toggleFaq(this)">¿Cómo cancelo mi suscripción?</div>
+        <div class="faq-a">Puedes cancelar en cualquier momento desde tu perfil, sin preguntas ni penalizaciones. Si cancelas, mantiene acceso hasta el final del período pagado.</div>
+      </div>
+      <div class="faq-item">
+        <div class="faq-q" onclick="toggleFaq(this)">¿Es segura mi información de salud?</div>
+        <div class="faq-a">Sí. No almacenamos información médica personal identificable. Las conversaciones son privadas y no se comparten con terceros. Puedes usar GlucoCoach con total tranquilidad.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CTA FINAL -->
+<section class="cta-final">
+  <h2>Empieza hoy.<br>Tu salud no puede esperar.</h2>
+  <p>7 días gratis, sin tarjeta de crédito. Cancela cuando quieras.</p>
+  <a href="https://gluocoach1.vercel.app/" class="btn-white">Probar GlucoCoach gratis →</a>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <p>© 2025 GlucoCoach · Hecho con ❤️ para la comunidad latina · <span>No reemplaza la atención médica profesional</span></p>
+</footer>
+
+<script>
+function toggleFaq(el) {
+  const item = el.parentElement;
+  item.classList.toggle('open');
+}
+</script>
+
+</body>
+</html>
