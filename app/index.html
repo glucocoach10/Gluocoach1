@@ -635,6 +635,7 @@ async function sendMessage() {
     });
 
     const data = await response.json();
+    console.log('Respuesta API:', JSON.stringify(data));
     const reply = data.content?.map(c => c.text || '').join('') || 'Lo siento, ocurrió un error. Intenta de nuevo.';
  
     removeTyping();
