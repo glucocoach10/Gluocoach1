@@ -1,4 +1,4 @@
-const CACHE_NAME = 'glucocoach-v1';
+const CACHE_NAME = 'glucocoach-v2';
 const urlsToCache = [
   '/',
   '/app',
