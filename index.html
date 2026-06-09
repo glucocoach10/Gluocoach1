@@ -941,6 +941,26 @@
 
 <script>
 let deferredPrompt;
+const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+const isInStandaloneMode = window.matchMedia('(display-mode: standalone)').matches;
+
+// Mostrar instrucciones para iPhone
+if (isIOS && !isInStandaloneMode) {
+  const iosMsg = document.createElement('div');
+  iosMsg.style.cssText = `
+    position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+    background: #1a6b3c; color: white; padding: 14px 20px;
+    border-radius: 16px; font-size: 13px; text-align: center;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.2); z-index: 999;
+    width: 85%; max-width: 340px; line-height: 1.5;
+  `;
+  iosMsg.innerHTML = `
+    📲 <strong>Instala GlucoCoach en tu iPhone</strong><br>
+    Toca <strong>compartir 📤</strong> y luego <strong>"Agregar a pantalla de inicio"</strong>
+    <br><button onclick="this.parentElement.remove()" style="margin-top:8px;background:rgba(255,255,255,0.2);border:none;color:white;padding:4px 12px;border-radius:20px;cursor:pointer;font-size:12px;">Entendido</button>
+  `;
+  setTimeout(() => document.body.appendChild(iosMsg), 2000);
+}
 
 window.addEventListener('beforeinstallprompt', (e) => {
   e.preventDefault();
@@ -966,6 +986,7 @@ async function installApp() {
     document.getElementById('installBtnHero').style.display = 'none';
   }
 }
+ 
 </script>
   
 <script>
