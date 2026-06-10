@@ -2,17 +2,208 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GlucoCoach — Tu coach de diabetes con IA</title>
 <link rel="manifest" href="/manifest.json">
-<link rel="apple-touch-icon" href="/icon-192.png">
-<link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
-<link rel="icon" type="image/png" sizes="512x512" href="/icon-512.png">
 <meta name="theme-color" content="#1a6b3c">
+<meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="GlucoCoach">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>GlucoCoach — Tu coach de diabetes con IA</title>
+<link rel="apple-touch-icon" href="/icon-192.png">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,400;0,600;0,700;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script type="module">
+  import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
+  import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
+  import { getFirestore, collection, addDoc, getDocs, query, where, orderBy, limit } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyDfwVmBY7Td5C7LwCUY6YvI_OVcp2Q5vYk",
+    authDomain: "glucocoach-29151.firebaseapp.com",
+    projectId: "glucocoach-29151",
+    storageBucket: "glucocoach-29151.firebasestorage.app",
+    messagingSenderId: "989677277216",
+    appId: "1:989677277216:web:7da58464b4c31d47b22c45"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const auth = getAuth(app);
+  const db = getFirestore(app);
+  let currentUser = null;
+  let glucoseChart = null;
+
+  // Auth state
+  onAuthStateChanged(auth, user => {
+    currentUser = user;
+    if (user) {
+      document.getElementById('loginScreen').style.display = 'none';
+      document.getElementById('mainApp').style.display = 'flex';
+      document.getElementById('userName').textContent = user.displayName?.split(' ')[0] || 'Usuario';
+      document.getElementById('userAvatar').textContent = user.displayName?.[0] || '👤';
+      loadGlucoseHistory();
+    } else {
+      document.getElementById('loginScreen').style.display = 'flex';
+      document.getElementById('mainApp').style.display = 'none';
+    }
+  });
+
+  // Login with Google
+  window.loginWithGoogle = async () => {
+    try {
+      const provider = new GoogleAuthProvider();
+      await signInWithPopup(auth, provider);
+    } catch (e) {
+      alert('Error al iniciar sesión. Intenta de nuevo.');
+    }
+  };
+
+  // Logout
+  window.logout = async () => {
+    await signOut(auth);
+  };
+
+  // Save glucose
+  window.saveGlucose = async () => {
+    if (!currentUser) return;
+    const value = parseInt(document.getElementById('glucoseInput').value);
+    const notes = document.getElementById('glucoseNotes').value;
+    const moment = document.getElementById('glucoseMoment').value;
+    if (!value || value < 30 || value > 600) {
+      alert('Por favor ingresa un valor válido entre 30 y 600 mg/dL');
+      return;
+    }
+    try {
+      await addDoc(collection(db, 'glucose_readings'), {
+        userId: currentUser.uid,
+        value,
+        notes,
+        moment,
+        timestamp: new Date()
+      });
+      document.getElementById('glucoseInput').value = '';
+      document.getElementById('glucoseNotes').value = '';
+      document.getElementById('saveSuccess').style.display = 'flex';
+      setTimeout(() => document.getElementById('saveSuccess').style.display = 'none', 2500);
+      loadGlucoseHistory();
+    } catch(e) {
+      alert('Error al guardar. Intenta de nuevo.');
+    }
+  };
+
+  // Load history
+  window.loadGlucoseHistory = async () => {
+    if (!currentUser) return;
+    try {
+      const q = query(
+        collection(db, 'glucose_readings'),
+        where('userId', '==', currentUser.uid),
+        orderBy('timestamp', 'desc'),
+        limit(30)
+      );
+      const snapshot = await getDocs(q);
+      const readings = [];
+      snapshot.forEach(doc => readings.push({ id: doc.id, ...doc.data() }));
+      renderHistory(readings);
+      renderChart(readings);
+      updateSidebarGlucose(readings);
+    } catch(e) {
+      console.error('Error loading history:', e);
+    }
+  };
+
+  function getGlucoseStatus(value) {
+    if (value < 70) return { label: '⚠️ Baja', color: '#c84b1f', bg: '#fde8e0' };
+    if (value <= 99) return { label: '✓ Normal', color: '#1a6b3c', bg: '#e8f5ed' };
+    if (value <= 125) return { label: '⚡ Prediabetes', color: '#d97706', bg: '#fef3c7' };
+    if (value <= 180) return { label: '↑ Alta', color: '#c84b1f', bg: '#fde8e0' };
+    return { label: '🚨 Muy alta', color: '#991b1b', bg: '#fee2e2' };
+  }
+
+  function updateSidebarGlucose(readings) {
+    if (readings.length === 0) return;
+    const latest = readings[0];
+    const status = getGlucoseStatus(latest.value);
+    document.getElementById('sidebarGlucose').textContent = latest.value;
+    document.getElementById('sidebarGlucoseStatus').textContent = status.label;
+  }
+
+  function renderHistory(readings) {
+    const container = document.getElementById('historyList');
+    if (readings.length === 0) {
+      container.innerHTML = '<p style="color:var(--muted);font-size:13px;text-align:center;padding:20px">Aún no tienes registros. ¡Registra tu primera lectura!</p>';
+      return;
+    }
+    container.innerHTML = readings.slice(0, 10).map(r => {
+      const status = getGlucoseStatus(r.value);
+      const date = r.timestamp?.toDate ? r.timestamp.toDate() : new Date(r.timestamp);
+      const dateStr = date.toLocaleDateString('es-MX', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+      return `
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border);">
+          <div>
+            <div style="font-size:13px;color:var(--muted)">${dateStr} · ${r.moment || 'Sin especificar'}</div>
+            ${r.notes ? `<div style="font-size:12px;color:var(--muted);margin-top:2px">${r.notes}</div>` : ''}
+          </div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="font-family:'Fraunces',serif;font-size:20px;font-weight:700">${r.value}</span>
+            <span style="font-size:11px;padding:3px 8px;border-radius:20px;background:${status.bg};color:${status.color};font-weight:500">${status.label}</span>
+          </div>
+        </div>`;
+    }).join('');
+  }
+
+  function renderChart(readings) {
+    const canvas = document.getElementById('glucoseChart');
+    if (!canvas) return;
+    const reversed = [...readings].reverse().slice(-14);
+    const labels = reversed.map(r => {
+      const date = r.timestamp?.toDate ? r.timestamp.toDate() : new Date(r.timestamp);
+      return date.toLocaleDateString('es-MX', { day: 'numeric', month: 'short' });
+    });
+    const values = reversed.map(r => r.value);
+    const colors = values.map(v => {
+      if (v < 70 || v > 180) return '#c84b1f';
+      if (v <= 125) return '#1a6b3c';
+      return '#d97706';
+    });
+    if (glucoseChart) glucoseChart.destroy();
+    glucoseChart = new Chart(canvas, {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [{
+          label: 'Glucosa mg/dL',
+          data: values,
+          borderColor: '#1a6b3c',
+          backgroundColor: 'rgba(26,107,60,0.1)',
+          pointBackgroundColor: colors,
+          pointRadius: 5,
+          tension: 0.3,
+          fill: true
+        }]
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: ctx => `${ctx.raw} mg/dL`
+            }
+          }
+        },
+        scales: {
+          y: {
+            min: 50,
+            grid: { color: 'rgba(0,0,0,0.05)' },
+            ticks: { callback: v => v + ' mg/dL', font: { size: 11 } }
+          },
+          x: { ticks: { font: { size: 11 } } }
+        }
+      }
+    });
+  }
+</script>
 <style>
   :root {
     --bg: #f5f0e8;
@@ -23,8 +214,6 @@
     --accent2: #c84b1f;
     --text: #1c1a16;
     --muted: #7a7060;
-    --bubble-user: #1a6b3c;
-    --bubble-ai: #ffffff;
   }
 
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -38,7 +227,87 @@
     flex-direction: column;
   }
 
-  /* Header */
+  /* LOGIN SCREEN */
+  #loginScreen {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 20px;
+    background: var(--bg);
+  }
+
+  .login-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 24px;
+    padding: 40px;
+    max-width: 380px;
+    width: 100%;
+    text-align: center;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.08);
+  }
+
+  .login-icon {
+    width: 64px; height: 64px;
+    background: var(--accent);
+    border-radius: 18px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 32px;
+    margin: 0 auto 20px;
+  }
+
+  .login-title {
+    font-family: 'Fraunces', serif;
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--accent);
+    margin-bottom: 8px;
+  }
+
+  .login-desc {
+    font-size: 14px;
+    color: var(--muted);
+    line-height: 1.6;
+    margin-bottom: 32px;
+    font-weight: 300;
+  }
+
+  .btn-google {
+    width: 100%;
+    background: white;
+    border: 1.5px solid var(--border);
+    border-radius: 12px;
+    padding: 14px;
+    font-size: 15px;
+    font-weight: 500;
+    cursor: pointer;
+    font-family: 'DM Sans', sans-serif;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    transition: all 0.2s;
+    color: var(--text);
+  }
+
+  .btn-google:hover { border-color: var(--accent); color: var(--accent); transform: translateY(-1px); }
+
+  .login-note {
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 16px;
+    line-height: 1.5;
+  }
+
+  /* MAIN APP */
+  #mainApp {
+    display: none;
+    flex-direction: column;
+    min-height: 100vh;
+  }
+
   header {
     background: var(--surface);
     border-bottom: 1px solid var(--border);
@@ -50,498 +319,560 @@
     position: sticky;
     top: 0;
     z-index: 10;
+    flex-shrink: 0;
   }
 
-  .logo {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-  }
+  .logo { display: flex; align-items: center; gap: 10px; }
 
   .logo-icon {
-    width: 34px;
-    height: 34px;
+    width: 34px; height: 34px;
     background: var(--accent);
     border-radius: 10px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    display: flex; align-items: center; justify-content: center;
     font-size: 18px;
   }
 
-  .logo-text {
-    font-family: 'Fraunces', serif;
-    font-size: 20px;
-    font-weight: 700;
-    color: var(--accent);
-  }
+  .logo-text { font-family: 'Fraunces', serif; font-size: 20px; font-weight: 700; color: var(--accent); }
+  .logo-sub { font-size: 11px; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; }
 
-  .logo-sub {
-    font-size: 11px;
-    color: var(--muted);
-    letter-spacing: 1px;
-    text-transform: uppercase;
-  }
+  .header-right { display: flex; align-items: center; gap: 10px; }
 
-  .header-badge {
+  .user-info {
+    display: flex; align-items: center; gap: 8px;
     background: var(--accent-light);
-    color: var(--accent);
-    font-size: 11px;
-    font-weight: 500;
-    padding: 4px 12px;
-    border-radius: 20px;
     border: 1px solid #b8dfc6;
+    border-radius: 20px;
+    padding: 4px 12px 4px 6px;
+    cursor: pointer;
   }
 
-  /* Layout */
+  .user-av {
+    width: 26px; height: 26px;
+    background: var(--accent);
+    color: white;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 600;
+  }
+
+  .user-name { font-size: 13px; color: var(--accent); font-weight: 500; }
+
+  /* TABS */
+  .tabs {
+    display: flex;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 0 20px;
+    flex-shrink: 0;
+  }
+
+  .tab-btn {
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    padding: 12px 16px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--muted);
+    cursor: pointer;
+    font-family: 'DM Sans', sans-serif;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.2s;
+    white-space: nowrap;
+  }
+
+  .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .tab-btn:hover { color: var(--text); }
+
+  /* TAB PANELS */
+  .tab-panel { display: none; flex: 1; overflow-y: auto; }
+  .tab-panel.active { display: flex; }
+
+  /* LAYOUT CHAT */
   .layout {
     display: flex;
     flex: 1;
     max-width: 1000px;
     width: 100%;
     margin: 0 auto;
-    gap: 0;
   }
 
-  /* Sidebar */
   .sidebar {
-    width: 240px;
+    width: 220px;
     flex-shrink: 0;
-    padding: 20px 16px;
+    padding: 16px 12px;
     border-right: 1px solid var(--border);
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 6px;
   }
 
   .sidebar-label {
-    font-size: 10px;
-    letter-spacing: 2px;
-    text-transform: uppercase;
-    color: var(--muted);
-    padding: 4px 8px;
-    margin-top: 8px;
+    font-size: 10px; letter-spacing: 2px; text-transform: uppercase;
+    color: var(--muted); padding: 4px 8px; margin-top: 8px;
   }
 
   .topic-btn {
-    background: none;
-    border: 1px solid transparent;
-    border-radius: 10px;
-    padding: 10px 12px;
-    text-align: left;
-    cursor: pointer;
-    font-family: 'DM Sans', sans-serif;
-    font-size: 13px;
-    color: var(--text);
-    display: flex;
-    align-items: center;
-    gap: 10px;
+    background: none; border: 1px solid transparent;
+    border-radius: 10px; padding: 9px 10px;
+    text-align: left; cursor: pointer;
+    font-family: 'DM Sans', sans-serif; font-size: 13px;
+    color: var(--text); display: flex; align-items: center; gap: 8px;
     transition: all 0.2s;
   }
 
-  .topic-btn:hover {
-    background: var(--accent-light);
-    border-color: #b8dfc6;
-    color: var(--accent);
-  }
+  .topic-btn:hover { background: var(--accent-light); border-color: #b8dfc6; color: var(--accent); }
+  .topic-btn.active { background: var(--accent-light); border-color: #b8dfc6; color: var(--accent); font-weight: 500; }
+  .topic-icon { font-size: 16px; width: 20px; text-align: center; flex-shrink: 0; }
 
-  .topic-btn.active {
-    background: var(--accent-light);
-    border-color: #b8dfc6;
-    color: var(--accent);
-    font-weight: 500;
-  }
-
-  .topic-icon {
-    font-size: 18px;
-    width: 24px;
-    text-align: center;
-    flex-shrink: 0;
-  }
-
-  /* Stats card in sidebar */
   .stats-card {
-    background: var(--accent);
-    border-radius: 14px;
-    padding: 16px;
-    color: white;
-    margin-top: auto;
+    background: var(--accent); border-radius: 14px;
+    padding: 14px; color: white; margin-top: auto;
   }
 
-  .stats-card-title {
-    font-size: 11px;
-    opacity: 0.7;
-    letter-spacing: 1px;
-    text-transform: uppercase;
-    margin-bottom: 8px;
-  }
+  .stats-card-title { font-size: 10px; opacity: 0.7; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 6px; }
+  .glucose-display { font-family: 'Fraunces', serif; font-size: 32px; font-weight: 700; line-height: 1; }
+  .glucose-unit { font-size: 11px; opacity: 0.7; }
+  .glucose-status { margin-top: 6px; font-size: 11px; background: rgba(255,255,255,0.2); padding: 3px 8px; border-radius: 20px; display: inline-block; }
 
-  .glucose-display {
-    font-family: 'Fraunces', serif;
-    font-size: 36px;
-    font-weight: 700;
-    line-height: 1;
-    margin-bottom: 4px;
-  }
+  .chat-area { flex: 1; display: flex; flex-direction: column; min-height: 0; }
 
-  .glucose-unit {
-    font-size: 12px;
-    opacity: 0.7;
-  }
-
-  .glucose-status {
-    margin-top: 8px;
-    font-size: 12px;
-    background: rgba(255,255,255,0.2);
-    padding: 4px 10px;
-    border-radius: 20px;
-    display: inline-block;
-  }
-
-  /* Chat area */
-  .chat-area {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    min-height: 0;
-  }
-
-  .topic-header {
-    padding: 16px 24px 12px;
-    border-bottom: 1px solid var(--border);
-    background: var(--surface);
-  }
-
-  .topic-header h2 {
-    font-family: 'Fraunces', serif;
-    font-size: 18px;
-    font-weight: 600;
-    color: var(--text);
-    margin-bottom: 2px;
-  }
-
-  .topic-header p {
-    font-size: 12px;
-    color: var(--muted);
-  }
+  .topic-header { padding: 14px 20px 10px; border-bottom: 1px solid var(--border); background: var(--surface); flex-shrink: 0; }
+  .topic-header h2 { font-family: 'Fraunces', serif; font-size: 17px; font-weight: 600; margin-bottom: 2px; }
+  .topic-header p { font-size: 12px; color: var(--muted); }
 
   .messages {
-    flex: 1;
-    overflow-y: auto;
-    padding: 24px;
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
-    min-height: 380px;
-    max-height: 420px;
+    flex: 1; overflow-y: auto; padding: 20px;
+    display: flex; flex-direction: column; gap: 14px;
+    min-height: 300px; max-height: 400px;
   }
 
-  .message {
-    display: flex;
-    gap: 10px;
-    animation: msgIn 0.3s ease both;
-  }
+  .message { display: flex; gap: 8px; animation: msgIn 0.3s ease both; }
+  .message.user { flex-direction: row-reverse; }
 
   @keyframes msgIn {
     from { opacity: 0; transform: translateY(8px); }
     to { opacity: 1; transform: translateY(0); }
   }
 
-  .message.user {
-    flex-direction: row-reverse;
-  }
-
   .avatar {
-    width: 32px;
-    height: 32px;
-    border-radius: 50%;
-    flex-shrink: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 14px;
-    font-weight: 600;
+    width: 30px; height: 30px; border-radius: 50%;
+    flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 600;
   }
 
-  .avatar.ai {
-    background: var(--accent);
-    color: white;
-    font-family: 'Fraunces', serif;
-    font-size: 13px;
-  }
+  .avatar.ai { background: var(--accent); color: white; font-family: 'Fraunces', serif; }
+  .avatar.user { background: #e0d8c8; color: var(--muted); font-size: 14px; }
 
-  .avatar.user {
-    background: #e0d8c8;
-    color: var(--muted);
-    font-size: 16px;
-  }
+  .bubble { max-width: 75%; padding: 10px 14px; border-radius: 14px; font-size: 14px; line-height: 1.6; }
+  .message.ai .bubble { background: white; border: 1px solid var(--border); border-radius: 4px 14px 14px 14px; }
+  .message.user .bubble { background: var(--accent); color: white; border-radius: 14px 4px 14px 14px; }
 
-  .bubble {
-    max-width: 75%;
-    padding: 12px 16px;
-    border-radius: 16px;
-    font-size: 14px;
-    line-height: 1.6;
-  }
-
-  .message.ai .bubble {
-    background: var(--bubble-ai);
-    border: 1px solid var(--border);
-    border-radius: 4px 16px 16px 16px;
-    color: var(--text);
-  }
-
-  .message.user .bubble {
-    background: var(--bubble-user);
-    color: white;
-    border-radius: 16px 4px 16px 16px;
-  }
-
-  .typing {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    padding: 14px 16px;
-  }
-
-  .dot {
-    width: 7px;
-    height: 7px;
-    border-radius: 50%;
-    background: var(--muted);
-    animation: bounce 1.2s infinite;
-  }
-
+  .typing { display: flex; align-items: center; gap: 4px; padding: 12px 14px; }
+  .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); animation: bounce 1.2s infinite; }
   .dot:nth-child(2) { animation-delay: 0.2s; }
   .dot:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes bounce { 0%,60%,100%{transform:translateY(0)} 30%{transform:translateY(-6px)} }
 
-  @keyframes bounce {
-    0%, 60%, 100% { transform: translateY(0); }
-    30% { transform: translateY(-6px); }
-  }
-
-  /* Quick prompts */
-  .quick-prompts {
-    padding: 12px 24px;
-    display: flex;
-    gap: 8px;
-    flex-wrap: wrap;
-    border-top: 1px solid var(--border);
-    background: var(--surface);
-  }
+  .quick-prompts { padding: 10px 20px; display: flex; gap: 6px; flex-wrap: wrap; border-top: 1px solid var(--border); background: var(--surface); flex-shrink: 0; }
 
   .quick-btn {
-    background: var(--accent-light);
-    border: 1px solid #b8dfc6;
-    border-radius: 20px;
-    padding: 6px 14px;
-    font-size: 12px;
-    color: var(--accent);
-    cursor: pointer;
-    font-family: 'DM Sans', sans-serif;
+    background: var(--accent-light); border: 1px solid #b8dfc6;
+    border-radius: 20px; padding: 5px 12px; font-size: 12px;
+    color: var(--accent); cursor: pointer; font-family: 'DM Sans', sans-serif;
     transition: all 0.2s;
   }
 
-  .quick-btn:hover {
-    background: var(--accent);
-    color: white;
-    border-color: var(--accent);
-  }
+  .quick-btn:hover { background: var(--accent); color: white; border-color: var(--accent); }
 
-  /* Input */
-  .input-area {
-    padding: 16px 24px;
-    border-top: 1px solid var(--border);
-    background: var(--surface);
-    display: flex;
-    gap: 10px;
-    align-items: flex-end;
-  }
+  .input-area { padding: 12px 20px; border-top: 1px solid var(--border); background: var(--surface); display: flex; gap: 10px; align-items: flex-end; flex-shrink: 0; }
 
   .input-wrap {
-    flex: 1;
-    background: var(--bg);
-    border: 1.5px solid var(--border);
-    border-radius: 14px;
-    display: flex;
-    align-items: center;
-    padding: 10px 14px;
-    gap: 8px;
+    flex: 1; background: var(--bg); border: 1.5px solid var(--border);
+    border-radius: 12px; display: flex; align-items: center; padding: 8px 12px; gap: 8px;
     transition: border-color 0.2s;
   }
-
-  .input-wrap:focus-within {
-    border-color: var(--accent);
-  }
+  .input-wrap:focus-within { border-color: var(--accent); }
 
   textarea {
-    flex: 1;
-    background: none;
-    border: none;
-    outline: none;
-    font-family: 'DM Sans', sans-serif;
-    font-size: 14px;
-    color: var(--text);
-    resize: none;
-    max-height: 80px;
-    line-height: 1.5;
+    flex: 1; background: none; border: none; outline: none;
+    font-family: 'DM Sans', sans-serif; font-size: 14px; color: var(--text);
+    resize: none; max-height: 80px; line-height: 1.5;
   }
-
   textarea::placeholder { color: var(--muted); }
 
   .send-btn {
-    width: 40px;
-    height: 40px;
-    background: var(--accent);
-    border: none;
-    border-radius: 12px;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 18px;
-    transition: all 0.2s;
-    flex-shrink: 0;
+    width: 38px; height: 38px; background: var(--accent); border: none;
+    border-radius: 10px; cursor: pointer; display: flex; align-items: center;
+    justify-content: center; font-size: 16px; transition: all 0.2s; flex-shrink: 0; color: white;
+  }
+  .send-btn:hover { background: #145530; }
+  .send-btn:disabled { background: var(--border); cursor: not-allowed; }
+
+  /* GLUCOSE PANEL */
+  .glucose-panel {
+    flex: 1; padding: 20px; overflow-y: auto;
+    display: flex; flex-direction: column; gap: 16px;
+    max-width: 700px; margin: 0 auto; width: 100%;
   }
 
-  .send-btn:hover { background: #145530; transform: scale(1.05); }
-  .send-btn:disabled { background: var(--border); cursor: not-allowed; transform: none; }
-
-  /* Mobile */
-@media (max-width: 600px) {
-    .sidebar { display: none; }
-    .layout { max-width: 100%; }
-    .chat-area { padding-bottom: 70px; }
-
-    .mobile-nav {
-      display: flex !important;
-    }
+  .panel-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 16px; padding: 20px;
   }
 
+  .panel-card h3 { font-family: 'Fraunces', serif; font-size: 16px; font-weight: 600; margin-bottom: 14px; }
+
+  .form-row { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+
+  .form-group { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 120px; }
+  .form-group label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; }
+
+  .form-input {
+    background: var(--bg); border: 1.5px solid var(--border);
+    border-radius: 10px; padding: 10px 12px; font-size: 15px;
+    font-family: 'DM Sans', sans-serif; color: var(--text); outline: none;
+    transition: border-color 0.2s;
+  }
+  .form-input:focus { border-color: var(--accent); }
+
+  select.form-input { cursor: pointer; }
+
+  .btn-save {
+    background: var(--accent); color: white; border: none;
+    border-radius: 10px; padding: 12px 24px; font-size: 14px;
+    font-weight: 500; cursor: pointer; font-family: 'DM Sans', sans-serif;
+    transition: all 0.2s; width: 100%;
+  }
+  .btn-save:hover { background: #145530; }
+
+  .save-success {
+    display: none; align-items: center; gap: 8px;
+    background: var(--accent-light); border: 1px solid #b8dfc6;
+    border-radius: 10px; padding: 10px 14px; font-size: 13px; color: var(--accent);
+  }
+
+  /* REFERENCE */
+  .ref-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; }
+
+  .ref-item {
+    border-radius: 10px; padding: 10px 12px; text-align: center;
+  }
+
+  .ref-item .range { font-family: 'Fraunces', serif; font-size: 15px; font-weight: 600; }
+  .ref-item .label { font-size: 11px; margin-top: 3px; }
+
+  /* REMINDERS */
+  .reminder-panel {
+    flex: 1; padding: 20px; overflow-y: auto;
+    display: flex; flex-direction: column; gap: 16px;
+    max-width: 700px; margin: 0 auto; width: 100%;
+  }
+
+  .reminder-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 16px; padding: 20px;
+  }
+
+  .reminder-card h3 { font-family: 'Fraunces', serif; font-size: 16px; font-weight: 600; margin-bottom: 6px; }
+  .reminder-card p { font-size: 13px; color: var(--muted); margin-bottom: 16px; line-height: 1.5; }
+
+  .reminder-item {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 0; border-bottom: 1px solid var(--border);
+  }
+
+  .reminder-item:last-child { border-bottom: none; }
+
+  .reminder-left { display: flex; align-items: center; gap: 12px; }
+  .reminder-emoji { font-size: 22px; }
+  .reminder-name { font-size: 14px; font-weight: 500; }
+  .reminder-time { font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+  .toggle {
+    width: 44px; height: 24px; background: var(--border);
+    border-radius: 12px; position: relative; cursor: pointer;
+    transition: background 0.2s; border: none; flex-shrink: 0;
+  }
+
+  .toggle.on { background: var(--accent); }
+  .toggle::after {
+    content: ''; position: absolute; top: 2px; left: 2px;
+    width: 20px; height: 20px; background: white; border-radius: 50%;
+    transition: transform 0.2s;
+  }
+  .toggle.on::after { transform: translateX(20px); }
+
+  /* MOBILE NAV */
   .mobile-nav {
-    display: none;
-    position: fixed;
-    bottom: 0; left: 0; right: 0;
-    background: var(--surface);
-    border-top: 1px solid var(--border);
-    padding: 8px 4px;
-    gap: 2px;
-    z-index: 100;
-    justify-content: space-around;
+    display: none; position: fixed; bottom: 0; left: 0; right: 0;
+    background: var(--surface); border-top: 1px solid var(--border);
+    padding: 6px 4px; z-index: 100; justify-content: space-around;
   }
 
   .mobile-nav-btn {
-    background: none;
-    border: none;
-    border-radius: 10px;
-    padding: 6px 4px;
-    cursor: pointer;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 3px;
-    flex: 1;
-    transition: background 0.2s;
+    background: none; border: none; border-radius: 10px;
+    padding: 5px 4px; cursor: pointer; display: flex;
+    flex-direction: column; align-items: center; gap: 2px; flex: 1;
   }
 
-  .mobile-nav-btn.active {
-    background: var(--accent-light);
-  }
+  .mobile-nav-btn.active { background: var(--accent-light); }
+  .mobile-nav-btn span:first-child { font-size: 18px; }
+  .mobile-nav-btn span:last-child { font-size: 9px; color: var(--muted); font-weight: 500; }
+  .mobile-nav-btn.active span:last-child { color: var(--accent); }
 
-  .mobile-nav-btn span:first-child {
-    font-size: 20px;
+  @media (max-width: 600px) {
+    .sidebar { display: none; }
+    .layout { max-width: 100%; }
+    .mobile-nav { display: flex; }
+    .tab-panel.active { padding-bottom: 70px; }
+    .glucose-panel { padding-bottom: 80px; }
+    .reminder-panel { padding-bottom: 80px; }
+    .tabs { display: none; }
   }
-
-  .mobile-nav-btn span:last-child {
-    font-size: 9px;
-    color: var(--muted);
-    font-weight: 500;
-  }
-
-  .mobile-nav-btn.active span:last-child {
-    color: var(--accent);
-  } 
 </style>
 </head>
 <body>
 
-<header>
-  <div class="logo">
-    <div class="logo-icon">🩺</div>
-    <div>
-      <div class="logo-text">GlucoCoach</div>
-      <div class="logo-sub">Tu coach de diabetes</div>
-    </div>
+<!-- LOGIN -->
+<div id="loginScreen">
+  <div class="login-card">
+    <div class="login-icon">🩺</div>
+    <div class="login-title">GlucoCoach</div>
+    <p class="login-desc">Tu coach inteligente de diabetes. Registra tu glucosa, chatea con IA y mantén el control de tu salud.</p>
+    <button class="btn-google" onclick="loginWithGoogle()">
+      <svg width="18" height="18" viewBox="0 0 18 18"><path fill="#4285F4" d="M16.51 8H8.98v3h4.3c-.18 1-.74 1.48-1.6 2.04v2.01h2.6a7.8 7.8 0 002.38-5.88c0-.57-.05-.66-.15-1.18z"/><path fill="#34A853" d="M8.98 17c2.16 0 3.97-.72 5.3-1.94l-2.6-2a4.8 4.8 0 01-7.18-2.54H1.83v2.07A8 8 0 008.98 17z"/><path fill="#FBBC05" d="M4.5 10.52a4.8 4.8 0 010-3.04V5.41H1.83a8 8 0 000 7.18l2.67-2.07z"/><path fill="#EA4335" d="M8.98 4.18c1.17 0 2.23.4 3.06 1.2l2.3-2.3A8 8 0 001.83 5.4L4.5 7.49a4.77 4.77 0 014.48-3.3z"/></svg>
+      Continuar con Google
+    </button>
+    <p class="login-note">Al ingresar aceptas que tus datos se almacenan de forma segura. GlucoCoach no reemplaza la atención médica.</p>
   </div>
-  <div class="header-badge">IA Activa ✦</div>
-</header>
+</div>
 
-<div class="layout">
+<!-- MAIN APP -->
+<div id="mainApp">
 
-  <!-- Sidebar -->
-  <div class="sidebar">
-    <div class="sidebar-label">Temas</div>
-
-    <button class="topic-btn active" onclick="setTopic(this, 'alimentacion')">
-      <span class="topic-icon">🥗</span> Alimentación
-    </button>
-    <button class="topic-btn" onclick="setTopic(this, 'glucosa')">
-      <span class="topic-icon">📊</span> Control de glucosa
-    </button>
-    <button class="topic-btn" onclick="setTopic(this, 'ejercicio')">
-      <span class="topic-icon">🏃</span> Ejercicio
-    </button>
-    <button class="topic-btn" onclick="setTopic(this, 'medicamentos')">
-      <span class="topic-icon">💊</span> Medicamentos
-    </button>
-    <button class="topic-btn" onclick="setTopic(this, 'emocional')">
-      <span class="topic-icon">🧘</span> Bienestar emocional
-    </button>
-    <button class="topic-btn" onclick="setTopic(this, 'recetas')">
-      <span class="topic-icon">👨‍🍳</span> Recetas saludables
-    </button>
-
-    <div class="stats-card">
-      <div class="stats-card-title">Glucosa actual</div>
-      <div class="glucose-display">118</div>
-      <div class="glucose-unit">mg/dL</div>
-      <div class="glucose-status">✓ En rango normal</div>
+  <header>
+    <div class="logo">
+      <div class="logo-icon">🩺</div>
+      <div>
+        <div class="logo-text">GlucoCoach</div>
+        <div class="logo-sub">Tu coach de diabetes</div>
+      </div>
     </div>
+    <div class="header-right">
+      <div class="user-info" onclick="logout()">
+        <div class="user-av" id="userAvatar">G</div>
+        <span class="user-name" id="userName">Usuario</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- TABS desktop -->
+  <div class="tabs">
+    <button class="tab-btn active" onclick="switchTab('chat', this)">💬 Coach IA</button>
+    <button class="tab-btn" onclick="switchTab('glucose', this)">📊 Mi Glucosa</button>
+    <button class="tab-btn" onclick="switchTab('reminders', this)">🔔 Recordatorios</button>
   </div>
 
-  <!-- Chat -->
-  <div class="chat-area">
-    <div class="topic-header">
-      <h2 id="topicTitle">🥗 Alimentación</h2>
-      <p id="topicDesc">Consejos personalizados de nutrición para controlar tu glucosa</p>
-    </div>
-
-    <div class="messages" id="messages">
-      <div class="message ai">
-        <div class="avatar ai">G</div>
-        <div class="bubble">
-          ¡Hola! Soy GlucoCoach, tu asistente de diabetes con inteligencia artificial. 🌿<br><br>
-          Estoy aquí para ayudarte con <strong>alimentación, glucosa, ejercicio, medicamentos</strong> y todo lo relacionado con tu bienestar. Puedes preguntarme lo que quieras — sin juicios, con información clara y práctica.<br><br>
-          ¿En qué te puedo ayudar hoy?
+  <!-- TAB: CHAT -->
+  <div class="tab-panel active" id="tab-chat">
+    <div class="layout">
+      <div class="sidebar">
+        <div class="sidebar-label">Temas</div>
+        <button class="topic-btn active" onclick="setTopic(this, 'alimentacion')"><span class="topic-icon">🥗</span> Alimentación</button>
+        <button class="topic-btn" onclick="setTopic(this, 'glucosa')"><span class="topic-icon">📊</span> Control glucosa</button>
+        <button class="topic-btn" onclick="setTopic(this, 'ejercicio')"><span class="topic-icon">🏃</span> Ejercicio</button>
+        <button class="topic-btn" onclick="setTopic(this, 'medicamentos')"><span class="topic-icon">💊</span> Medicamentos</button>
+        <button class="topic-btn" onclick="setTopic(this, 'emocional')"><span class="topic-icon">🧘</span> Bienestar</button>
+        <button class="topic-btn" onclick="setTopic(this, 'recetas')"><span class="topic-icon">👨‍🍳</span> Recetas</button>
+        <div class="stats-card">
+          <div class="stats-card-title">Última glucosa</div>
+          <div class="glucose-display" id="sidebarGlucose">—</div>
+          <div class="glucose-unit">mg/dL</div>
+          <div class="glucose-status" id="sidebarGlucoseStatus">Sin registros</div>
+        </div>
+      </div>
+      <div class="chat-area">
+        <div class="topic-header">
+          <h2 id="topicTitle">🥗 Alimentación</h2>
+          <p id="topicDesc">Consejos personalizados de nutrición para controlar tu glucosa</p>
+        </div>
+        <div class="messages" id="messages">
+          <div class="message ai">
+            <div class="avatar ai">G</div>
+            <div class="bubble">¡Hola! Soy GlucoCoach 🌿<br><br>Estoy aquí para ayudarte con <strong>alimentación, glucosa, ejercicio, medicamentos</strong> y más. También puedes registrar tu glucosa en la pestaña <strong>📊 Mi Glucosa</strong>.<br><br>¿En qué te puedo ayudar hoy?</div>
+          </div>
+        </div>
+        <div class="quick-prompts" id="quickPrompts">
+          <button class="quick-btn" onclick="sendQuick(this)">¿Qué puedo desayunar?</button>
+          <button class="quick-btn" onclick="sendQuick(this)">¿Puedo comer tortillas?</button>
+          <button class="quick-btn" onclick="sendQuick(this)">Mi glucosa subió a 200</button>
+          <button class="quick-btn" onclick="sendQuick(this)">¿Qué frutas son seguras?</button>
+        </div>
+        <div class="input-area">
+          <div class="input-wrap">
+            <textarea id="userInput" placeholder="Escríbeme tu pregunta..." rows="1"
+              onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendMessage();}"
+              oninput="this.style.height='auto';this.style.height=this.scrollHeight+'px'"></textarea>
+          </div>
+          <button class="send-btn" id="sendBtn" onclick="sendMessage()">➤</button>
         </div>
       </div>
     </div>
+  </div>
 
-    <div class="quick-prompts" id="quickPrompts">
-      <button class="quick-btn" onclick="sendQuick(this)">¿Qué puedo desayunar?</button>
-      <button class="quick-btn" onclick="sendQuick(this)">¿Puedo comer tortillas?</button>
-      <button class="quick-btn" onclick="sendQuick(this)">Mi glucosa subió a 200</button>
-      <button class="quick-btn" onclick="sendQuick(this)">¿Qué frutas son seguras?</button>
-    </div>
+  <!-- TAB: GLUCOSA -->
+  <div class="tab-panel" id="tab-glucose">
+    <div class="glucose-panel">
 
-    <div class="input-area">
-      <div class="input-wrap">
-        <textarea id="userInput" placeholder="Escríbeme tu pregunta..." rows="1"
-          onkeydown="if(event.key==='Enter' && !event.shiftKey){event.preventDefault(); sendMessage();}"
-          oninput="this.style.height='auto'; this.style.height=this.scrollHeight+'px'"></textarea>
+      <!-- Registro -->
+      <div class="panel-card">
+        <h3>📝 Registrar lectura</h3>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Glucosa (mg/dL)</label>
+            <input type="number" id="glucoseInput" class="form-input" placeholder="Ej: 120" min="30" max="600">
+          </div>
+          <div class="form-group">
+            <label>Momento</label>
+            <select id="glucoseMoment" class="form-input">
+              <option value="Ayunas">Ayunas</option>
+              <option value="Antes de comer">Antes de comer</option>
+              <option value="2h después de comer">2h después de comer</option>
+              <option value="Antes de dormir">Antes de dormir</option>
+              <option value="Madrugada">Madrugada</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group" style="margin-bottom:14px">
+          <label>Notas (opcional)</label>
+          <input type="text" id="glucoseNotes" class="form-input" placeholder="Ej: después de ejercicio">
+        </div>
+        <button class="btn-save" onclick="saveGlucose()">💾 Guardar lectura</button>
+        <div class="save-success" id="saveSuccess" style="margin-top:10px">
+          ✅ Lectura guardada correctamente
+        </div>
       </div>
-      <button class="send-btn" id="sendBtn" onclick="sendMessage()">➤</button>
+
+      <!-- Gráfica -->
+      <div class="panel-card">
+        <h3>📈 Historial (últimas 14 lecturas)</h3>
+        <canvas id="glucoseChart" style="max-height:200px"></canvas>
+      </div>
+
+      <!-- Historial -->
+      <div class="panel-card">
+        <h3>🕒 Lecturas recientes</h3>
+        <div id="historyList">
+          <p style="color:var(--muted);font-size:13px;text-align:center;padding:20px">Cargando historial...</p>
+        </div>
+      </div>
+
+      <!-- Referencia -->
+      <div class="panel-card">
+        <h3>📋 Rangos de referencia</h3>
+        <div class="ref-grid">
+          <div class="ref-item" style="background:#fee2e2">
+            <div class="range" style="color:#991b1b">&lt; 70</div>
+            <div class="label" style="color:#991b1b">Hipoglucemia</div>
+          </div>
+          <div class="ref-item" style="background:#e8f5ed">
+            <div class="range" style="color:#1a6b3c">70–99</div>
+            <div class="label" style="color:#1a6b3c">Normal (ayunas)</div>
+          </div>
+          <div class="ref-item" style="background:#fef3c7">
+            <div class="range" style="color:#d97706">100–125</div>
+            <div class="label" style="color:#d97706">Prediabetes</div>
+          </div>
+          <div class="ref-item" style="background:#fde8e0">
+            <div class="range" style="color:#c84b1f">≥ 126</div>
+            <div class="label" style="color:#c84b1f">Diabetes</div>
+          </div>
+        </div>
+      </div>
+
     </div>
+  </div>
+
+  <!-- TAB: RECORDATORIOS -->
+  <div class="tab-panel" id="tab-reminders">
+    <div class="reminder-panel">
+      <div class="reminder-card">
+        <h3>🔔 Recordatorios activos</h3>
+        <p>Activa los recordatorios que necesites. El navegador te enviará notificaciones en los horarios configurados.</p>
+
+        <div class="reminder-item">
+          <div class="reminder-left">
+            <div class="reminder-emoji">💊</div>
+            <div>
+              <div class="reminder-name">Medicamento matutino</div>
+              <div class="reminder-time">8:00 AM todos los días</div>
+            </div>
+          </div>
+          <button class="toggle" id="toggle-med1" onclick="toggleReminder(this, 'med1', 8, 0, 'Hora de tu medicamento matutino 💊')"></button>
+        </div>
+
+        <div class="reminder-item">
+          <div class="reminder-left">
+            <div class="reminder-emoji">📊</div>
+            <div>
+              <div class="reminder-name">Medir glucosa en ayunas</div>
+              <div class="reminder-time">7:00 AM todos los días</div>
+            </div>
+          </div>
+          <button class="toggle" id="toggle-glu1" onclick="toggleReminder(this, 'glu1', 7, 0, 'Mide tu glucosa en ayunas 📊')"></button>
+        </div>
+
+        <div class="reminder-item">
+          <div class="reminder-left">
+            <div class="reminder-emoji">🍽️</div>
+            <div>
+              <div class="reminder-name">Medir glucosa post-comida</div>
+              <div class="reminder-time">2:00 PM todos los días</div>
+            </div>
+          </div>
+          <button class="toggle" id="toggle-glu2" onclick="toggleReminder(this, 'glu2', 14, 0, 'Mide tu glucosa 2 horas después de comer 🍽️')"></button>
+        </div>
+
+        <div class="reminder-item">
+          <div class="reminder-left">
+            <div class="reminder-emoji">💊</div>
+            <div>
+              <div class="reminder-name">Medicamento nocturno</div>
+              <div class="reminder-time">9:00 PM todos los días</div>
+            </div>
+          </div>
+          <button class="toggle" id="toggle-med2" onclick="toggleReminder(this, 'med2', 21, 0, 'Hora de tu medicamento nocturno 💊')"></button>
+        </div>
+
+        <div class="reminder-item">
+          <div class="reminder-left">
+            <div class="reminder-emoji">🏃</div>
+            <div>
+              <div class="reminder-name">Hora de ejercicio</div>
+              <div class="reminder-time">6:00 PM todos los días</div>
+            </div>
+          </div>
+          <button class="toggle" id="toggle-eje1" onclick="toggleReminder(this, 'eje1', 18, 0, '¡Es hora de moverte! 🏃 Tu rutina de ejercicio te espera.')"></button>
+        </div>
+
+      </div>
+
+      <div class="reminder-card">
+        <h3>ℹ️ Cómo funcionan</h3>
+        <p>Al activar un recordatorio el navegador te pedirá permiso para enviar notificaciones. Acepta para recibirlas aunque la app esté cerrada.</p>
+        <p style="margin-top:8px">En iPhone las notificaciones funcionan si instalaste la app en tu pantalla de inicio desde Safari.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Mobile Nav -->
+  <div class="mobile-nav">
+    <button class="mobile-nav-btn active" onclick="switchTabMobile('chat', this)"><span>💬</span><span>Coach</span></button>
+    <button class="mobile-nav-btn" onclick="switchTabMobile('glucose', this)"><span>📊</span><span>Glucosa</span></button>
+    <button class="mobile-nav-btn" onclick="switchTabMobile('reminders', this)"><span>🔔</span><span>Avisos</span></button>
   </div>
 
 </div>
@@ -552,71 +883,77 @@ const TOPICS = {
     title: '🥗 Alimentación',
     desc: 'Consejos personalizados de nutrición para controlar tu glucosa',
     prompts: ['¿Qué puedo desayunar?', '¿Puedo comer tortillas?', '¿Qué frutas son seguras?', 'Menú para la semana'],
-    system: 'Eres GlucoCoach, un coach especializado en alimentación para personas con diabetes. Hablas en español latinoamericano, con calidez y claridad. Das consejos prácticos sobre alimentación, índice glucémico, porciones y alternativas saludables. Siempre recomiendas consultar al médico para decisiones médicas importantes. Usa emojis con moderación. Sé conciso pero útil.'
+    system: 'Eres GlucoCoach, un coach especializado en alimentación para personas con diabetes. Hablas en español latinoamericano, con calidez y claridad. Das consejos prácticos sobre alimentación, índice glucémico, porciones y alternativas saludables. Siempre recomiendas consultar al médico para decisiones médicas importantes. Sé conciso pero útil.'
   },
   glucosa: {
     title: '📊 Control de glucosa',
     desc: 'Entiende tus niveles y qué hacer cuando cambian',
     prompts: ['Mi glucosa subió a 200', '¿Cuándo medirme?', 'Glucosa en ayunas alta', '¿Qué es la HbA1c?'],
-    system: 'Eres GlucoCoach, especialista en control glucémico para diabéticos. Explicas en español latinoamericano qué significan los niveles de glucosa, cuándo preocuparse, qué factores los afectan y qué hacer ante hipoglucemia o hiperglucemia. Siempre recomiendas acudir al médico ante emergencias. Usa lenguaje claro, sin tecnicismos innecesarios.'
+    system: 'Eres GlucoCoach, especialista en control glucémico. Explicas qué significan los niveles de glucosa, cuándo preocuparse y qué hacer. Siempre recomiendas acudir al médico ante emergencias.'
   },
   ejercicio: {
     title: '🏃 Ejercicio',
     desc: 'Rutinas seguras y efectivas para diabéticos',
     prompts: ['¿Puedo hacer ejercicio intenso?', 'Glucosa baja al ejercitarme', 'Rutina para principiantes', '¿Cuándo no debo ejercitarme?'],
-    system: 'Eres GlucoCoach, coach de ejercicio especializado en diabetes. Orientas en español sobre rutinas seguras, cómo monitorear la glucosa antes/durante/después del ejercicio, qué señales de alarma tener en cuenta y cómo adaptar el ejercicio al nivel de cada persona. Eres motivador pero prudente con la seguridad.'
+    system: 'Eres GlucoCoach, coach de ejercicio especializado en diabetes. Orientas sobre rutinas seguras, monitoreo de glucosa antes/durante/después del ejercicio y señales de alarma.'
   },
   medicamentos: {
     title: '💊 Medicamentos',
     desc: 'Información sobre insulina, metformina y más',
     prompts: ['¿Qué es la metformina?', 'Olvidé tomar mi medicamento', 'Efectos secundarios de insulina', '¿Puedo tomar ibuprofeno?'],
-    system: 'Eres GlucoCoach, asistente informativo sobre medicamentos para diabetes. Explicas en español qué hace cada medicamento común (metformina, insulina, glibenclamida, etc.), efectos secundarios frecuentes y preguntas frecuentes. SIEMPRE aclaras que no puedes reemplazar al médico ni ajustar dosis — tu rol es informar y orientar para mejores conversaciones con el equipo médico.'
+    system: 'Eres GlucoCoach, asistente informativo sobre medicamentos para diabetes. SIEMPRE aclaras que no puedes reemplazar al médico ni ajustar dosis.'
   },
   emocional: {
     title: '🧘 Bienestar emocional',
     desc: 'Apoyo para vivir bien con diabetes',
-    prompts: ['Me siento agobiado con la diabetes', 'No quiero seguir el tratamiento', 'Cómo decirle a mi familia', '¿Es normal sentirme así?'],
-    system: 'Eres GlucoCoach, un coach empático especializado en el aspecto emocional de vivir con diabetes. Hablas con calidez, sin juzgar, validando los sentimientos de la persona. Ofreces perspectivas útiles, estrategias de afrontamiento y recuerdas que no están solos. Para situaciones de salud mental grave siempre sugieres apoyo profesional. Eres como un amigo que entiende.'
+    prompts: ['Me siento agobiado', 'No quiero seguir el tratamiento', 'Cómo decirle a mi familia', '¿Es normal sentirme así?'],
+    system: 'Eres GlucoCoach, coach empático especializado en el aspecto emocional de vivir con diabetes. Hablas con calidez, sin juzgar. Para salud mental grave siempre sugieres apoyo profesional.'
   },
   recetas: {
     title: '👨‍🍳 Recetas saludables',
     desc: 'Comidas deliciosas y aptas para diabéticos',
     prompts: ['Receta de desayuno rápido', 'Postre sin azúcar', 'Comida mexicana apta', 'Licuado sin elevar glucosa'],
-    system: 'Eres GlucoCoach, chef y nutriólogo especializado en recetas para diabéticos. Propones recetas deliciosas y prácticas en español, con ingredientes fáciles de conseguir en México y Latinoamérica. Explicas por qué cada receta es apta, el impacto glucémico estimado y posibles sustituciones. Haces que comer sano con diabetes sea placentero, no un castigo.'
+    system: 'Eres GlucoCoach, chef y nutriólogo para diabéticos. Propones recetas deliciosas con ingredientes fáciles de conseguir en México y Latinoamérica.'
   }
 };
 
 let currentTopic = 'alimentacion';
 let conversationHistory = [];
 let isLoading = false;
-function setTopicMobile(btn, topic) {
+const reminderTimers = {};
+
+// TABS
+function switchTab(tab, btn) {
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + tab).classList.add('active');
+  if (btn) btn.classList.add('active');
+}
+
+function switchTabMobile(tab, btn) {
+  switchTab(tab, null);
   document.querySelectorAll('.mobile-nav-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
-  
-  const sidebarBtn = document.querySelector(`.topic-btn[onclick*="${topic}"]`);
-  if (sidebarBtn) setTopic(sidebarBtn, topic);
-}  
+  const tabBtns = document.querySelectorAll('.tab-btn');
+  tabBtns.forEach(b => {
+    if (b.getAttribute('onclick')?.includes(tab)) b.classList.add('active');
+  });
+}
+
+// TOPIC
 function setTopic(btn, topic) {
   document.querySelectorAll('.topic-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   currentTopic = topic;
-
   const t = TOPICS[topic];
   document.getElementById('topicTitle').textContent = t.title;
   document.getElementById('topicDesc').textContent = t.desc;
-
-  const qp = document.getElementById('quickPrompts');
-  qp.innerHTML = t.prompts.map(p => `<button class="quick-btn" onclick="sendQuick(this)">${p}</button>`).join('');
-
-  // Reset conversation
+  document.getElementById('quickPrompts').innerHTML = t.prompts.map(p => `<button class="quick-btn" onclick="sendQuick(this)">${p}</button>`).join('');
   conversationHistory = [];
-  const msgs = document.getElementById('messages');
-  msgs.innerHTML = `
+  document.getElementById('messages').innerHTML = `
     <div class="message ai">
       <div class="avatar ai">G</div>
-      <div class="bubble">
-        Cambiamos a <strong>${t.title}</strong>. ¿Qué te gustaría saber sobre este tema?
-      </div>
+      <div class="bubble">Cambiamos a <strong>${t.title}</strong>. ¿Qué te gustaría saber?</div>
     </div>`;
 }
 
@@ -629,17 +966,14 @@ function addMessage(role, text) {
   const msgs = document.getElementById('messages');
   const div = document.createElement('div');
   div.className = `message ${role}`;
-
-  const avatar = document.createElement('div');
-  avatar.className = `avatar ${role}`;
-  avatar.textContent = role === 'ai' ? 'G' : '👤';
-
-  const bubble = document.createElement('div');
-  bubble.className = 'bubble';
-  bubble.innerHTML = text.replace(/\n/g, '<br>').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-
-  div.appendChild(avatar);
-  div.appendChild(bubble);
+  const av = document.createElement('div');
+  av.className = `avatar ${role}`;
+  av.textContent = role === 'ai' ? 'G' : '👤';
+  const bub = document.createElement('div');
+  bub.className = 'bubble';
+  bub.innerHTML = text.replace(/\n/g, '<br>').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+  div.appendChild(av);
+  div.appendChild(bub);
   msgs.appendChild(div);
   msgs.scrollTop = msgs.scrollHeight;
 }
@@ -649,17 +983,14 @@ function showTyping() {
   const div = document.createElement('div');
   div.className = 'message ai';
   div.id = 'typingIndicator';
-
-  const avatar = document.createElement('div');
-  avatar.className = 'avatar ai';
-  avatar.textContent = 'G';
-
-  const bubble = document.createElement('div');
-  bubble.className = 'bubble typing';
-  bubble.innerHTML = '<div class="dot"></div><div class="dot"></div><div class="dot"></div>';
-
-  div.appendChild(avatar);
-  div.appendChild(bubble);
+  const av = document.createElement('div');
+  av.className = 'avatar ai';
+  av.textContent = 'G';
+  const bub = document.createElement('div');
+  bub.className = 'bubble typing';
+  bub.innerHTML = '<div class="dot"></div><div class="dot"></div><div class="dot"></div>';
+  div.appendChild(av);
+  div.appendChild(bub);
   msgs.appendChild(div);
   msgs.scrollTop = msgs.scrollHeight;
 }
@@ -674,17 +1005,13 @@ async function sendMessage() {
   const input = document.getElementById('userInput');
   const text = input.value.trim();
   if (!text) return;
-
   input.value = '';
   input.style.height = 'auto';
   isLoading = true;
   document.getElementById('sendBtn').disabled = true;
-
   addMessage('user', text);
   conversationHistory.push({ role: 'user', content: text });
-
   showTyping();
-
   try {
     const response = await fetch('/api/chat', {
       method: 'POST',
@@ -696,50 +1023,54 @@ async function sendMessage() {
         messages: conversationHistory
       })
     });
-
     const data = await response.json();
-    console.log('Respuesta API:', JSON.stringify(data));
     const reply = data.content?.map(c => c.text || '').join('') || 'Lo siento, ocurrió un error. Intenta de nuevo.';
- 
     removeTyping();
     addMessage('ai', reply);
     conversationHistory.push({ role: 'assistant', content: reply });
-
   } catch (err) {
     removeTyping();
     addMessage('ai', 'Hubo un problema de conexión. Por favor intenta de nuevo en un momento.');
   }
-
   isLoading = false;
   document.getElementById('sendBtn').disabled = false;
   document.getElementById('userInput').focus();
 }
- </script>
-<!-- Mobile Nav -->
-<div class="mobile-nav" id="mobileNav">
-  <button class="mobile-nav-btn active" onclick="setTopicMobile(this, 'alimentacion')">
-    <span>🥗</span><span>Alimentación</span>
-  </button>
-  <button class="mobile-nav-btn" onclick="setTopicMobile(this, 'glucosa')">
-    <span>📊</span><span>Glucosa</span>
-  </button>
-  <button class="mobile-nav-btn" onclick="setTopicMobile(this, 'ejercicio')">
-    <span>🏃</span><span>Ejercicio</span>
-  </button>
-  <button class="mobile-nav-btn" onclick="setTopicMobile(this, 'medicamentos')">
-    <span>💊</span><span>Medicamentos</span>
-  </button>
-  <button class="mobile-nav-btn" onclick="setTopicMobile(this, 'emocional')">
-    <span>🧘</span><span>Bienestar</span>
-  </button>
-  <button class="mobile-nav-btn" onclick="setTopicMobile(this, 'recetas')">
-    <span>👨‍🍳</span><span>Recetas</span>
-  </button>
-</div>
-  <script>
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('/sw.js');
+
+// REMINDERS
+async function toggleReminder(btn, id, hour, minute, message) {
+  const isOn = btn.classList.contains('on');
+  if (isOn) {
+    btn.classList.remove('on');
+    if (reminderTimers[id]) clearInterval(reminderTimers[id]);
+    return;
   }
+  if (!('Notification' in window)) {
+    alert('Tu navegador no soporta notificaciones.');
+    return;
+  }
+  const permission = await Notification.requestPermission();
+  if (permission !== 'granted') {
+    alert('Necesitas permitir las notificaciones para activar los recordatorios.');
+    return;
+  }
+  btn.classList.add('on');
+  const checkTime = () => {
+    const now = new Date();
+    if (now.getHours() === hour && now.getMinutes() === minute) {
+      new Notification('GlucoCoach 🩺', {
+        body: message,
+        icon: '/icon-192.png'
+      });
+    }
+  };
+  reminderTimers[id] = setInterval(checkTime, 60000);
+  checkTime();
+}
+
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/sw.js');
+}
 </script>
 </body>
 </html>
