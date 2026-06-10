@@ -623,7 +623,7 @@
   .mobile-nav-btn span:last-child { font-size: 9px; color: var(--muted); font-weight: 500; }
   .mobile-nav-btn.active span:last-child { color: var(--accent); }
 
-  @media (max-width: 600px) {
+@media (max-width: 600px) {
     .sidebar { display: none; }
     .layout { max-width: 100%; }
     .mobile-nav { display: flex; }
@@ -631,7 +631,41 @@
     .glucose-panel { padding-bottom: 80px; }
     .reminder-panel { padding-bottom: 80px; }
     .tabs { display: none; }
+    .chat-area { padding-bottom: 0; }
   }
+
+  .chat-topic-nav {
+    display: none;
+    position: fixed;
+    bottom: 56px;
+    left: 0; right: 0;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    padding: 6px 4px;
+    z-index: 99;
+    justify-content: space-around;
+    overflow-x: auto;
+  }
+
+  @media (max-width: 600px) {
+    .chat-topic-nav { display: flex; }
+    #tab-chat { padding-bottom: 110px; }
+  }
+
+  .chat-topic-btn {
+    background: none; border: none;
+    border-radius: 8px; padding: 4px 6px;
+    cursor: pointer; display: flex;
+    flex-direction: column; align-items: center;
+    gap: 2px; flex-shrink: 0;
+    font-family: 'DM Sans', sans-serif;
+  }
+
+  .chat-topic-btn.active { background: var(--accent-light); }
+  .chat-topic-btn span:first-child { font-size: 16px; }
+  .chat-topic-btn span:last-child { font-size: 9px; color: var(--muted); white-space: nowrap; }
+  .chat-topic-btn.active span:last-child { color: var(--accent); }
+
 </style>
 </head>
 <body>
@@ -868,6 +902,15 @@
     </div>
   </div>
 
+  <!-- Chat Topic Nav Mobile -->
+<div class="chat-topic-nav" id="chatTopicNav">
+  <button class="chat-topic-btn active" onclick="setTopicMobile(this, 'alimentacion')"><span>🥗</span><span>Alimentación</span></button>
+  <button class="chat-topic-btn" onclick="setTopicMobile(this, 'glucosa')"><span>📊</span><span>Glucosa</span></button>
+  <button class="chat-topic-btn" onclick="setTopicMobile(this, 'ejercicio')"><span>🏃</span><span>Ejercicio</span></button>
+  <button class="chat-topic-btn" onclick="setTopicMobile(this, 'medicamentos')"><span>💊</span><span>Medicamentos</span></button>
+  <button class="chat-topic-btn" onclick="setTopicMobile(this, 'emocional')"><span>🧘</span><span>Bienestar</span></button>
+  <button class="chat-topic-btn" onclick="setTopicMobile(this, 'recetas')"><span>👨‍🍳</span><span>Recetas</span></button>
+</div>
   <!-- Mobile Nav -->
   <div class="mobile-nav">
     <button class="mobile-nav-btn active" onclick="switchTabMobile('chat', this)"><span>💬</span><span>Coach</span></button>
@@ -941,7 +984,13 @@ function switchTabMobile(tab, btn) {
 }
 
 // TOPIC
-function setTopic(btn, topic) {
+function setTopicMobile(btn, topic) {
+  document.querySelectorAll('.chat-topic-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  const sidebarBtn = document.querySelector(`.topic-btn[onclick*="${topic}"]`);
+  if (sidebarBtn) setTopic(sidebarBtn, topic);
+}
+  function setTopic(btn, topic) {
   document.querySelectorAll('.topic-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   currentTopic = topic;
