@@ -1122,9 +1122,25 @@ async function sendMessage() {
 async function toggleReminderCustom(btn, id, timeInputId, message) {
   const timeInput = document.getElementById(timeInputId);
   const [hour, minute] = timeInput.value.split(':').map(Number);
+
+  // Guardar hora en localStorage
+  localStorage.setItem('time_' + id, timeInput.value);
+
   timeInput.disabled = !btn.classList.contains('on');
   await toggleReminder(btn, id, hour, minute, message);
 }
+
+function loadSavedTimes() {
+  const reminders = ['med1', 'glu1', 'glu2', 'med2', 'eje1'];
+  reminders.forEach(id => {
+    const saved = localStorage.getItem('time_' + id);
+    const input = document.getElementById('time-' + id);
+    if (saved && input) input.value = saved;
+  });
+}
+
+
+  
   async function toggleReminder(btn, id, hour, minute, message) {
   const isOn = btn.classList.contains('on');
   if (isOn) {
@@ -1158,6 +1174,37 @@ async function toggleReminderCustom(btn, id, timeInputId, message) {
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('/sw.js');
 }
+
+// Cargar horas guardadas al iniciar
+loadSavedTimes();
+
+// Verificar recordatorios cada minuto
+setInterval(() => {
+  const now = new Date();
+  const reminders = ['med1', 'glu1', 'glu2', 'med2', 'eje1'];
+  reminders.forEach(id => {
+    const toggle = document.getElementById('toggle-' + id);
+    if (!toggle?.classList.contains('on')) return;
+    const savedTime = localStorage.getItem('time_' + id);
+    if (!savedTime) return;
+    const [h, m] = savedTime.split(':').map(Number);
+    if (now.getHours() === h && now.getMinutes() === m) {
+      const messages = {
+        med1: 'Hora de tu medicamento matutino 💊',
+        glu1: 'Mide tu glucosa en ayunas 📊',
+        glu2: 'Mide tu glucosa 2 horas después de comer 🍽️',
+        med2: 'Hora de tu medicamento nocturno 💊',
+        eje1: '¡Es hora de moverte! 🏃'
+      };
+      if (Notification.permission === 'granted') {
+        new Notification('GlucoCoach 🩺', {
+          body: messages[id],
+          icon: '/icon-192.png'
+        });
+      }
+    }
+  });
+}, 60000);
 </script>
 </body>
 </html>
