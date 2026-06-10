@@ -1124,7 +1124,12 @@ async function toggleReminderCustom(btn, id, timeInputId, message) {
   const [hour, minute] = timeInput.value.split(':').map(Number);
 
   // Guardar hora en localStorage
-  localStorage.setItem('time_' + id, timeInput.value);
+  try {
+  localStorage.setItem('glucocoach_time_' + id, timeInput.value);
+  console.log('Hora guardada:', id, timeInput.value);
+} catch(e) {
+  console.error('Error guardando hora:', e);
+}
 
   timeInput.disabled = !btn.classList.contains('on');
   await toggleReminder(btn, id, hour, minute, message);
@@ -1133,9 +1138,16 @@ async function toggleReminderCustom(btn, id, timeInputId, message) {
 function loadSavedTimes() {
   const reminders = ['med1', 'glu1', 'glu2', 'med2', 'eje1'];
   reminders.forEach(id => {
-    const saved = localStorage.getItem('time_' + id);
-    const input = document.getElementById('time-' + id);
-    if (saved && input) input.value = saved;
+    try {
+      const saved = localStorage.getItem('glucocoach_time_' + id);
+      const input = document.getElementById('time-' + id);
+      if (saved && input) {
+        input.value = saved;
+        console.log('Cargando hora para', id, saved);
+      }
+    } catch(e) {
+      console.error('Error cargando hora:', e);
+    }
   });
 }
 
@@ -1175,8 +1187,10 @@ if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('/sw.js');
 }
 
-// Cargar horas guardadas al iniciar
-loadSavedTimes();
+// Cargar horas guardadas cuando el usuario inicia sesión
+document.addEventListener('DOMContentLoaded', () => {
+  setTimeout(loadSavedTimes, 1500);
+});
 
 // Verificar recordatorios cada minuto
 setInterval(() => {
@@ -1185,7 +1199,7 @@ setInterval(() => {
   reminders.forEach(id => {
     const toggle = document.getElementById('toggle-' + id);
     if (!toggle?.classList.contains('on')) return;
-    const savedTime = localStorage.getItem('time_' + id);
+    const savedTime = localStorage.getItem('glucocoach_time_' + id);
     if (!savedTime) return;
     const [h, m] = savedTime.split(':').map(Number);
     if (now.getHours() === h && now.getMinutes() === m) {
