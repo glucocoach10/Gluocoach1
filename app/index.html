@@ -1189,11 +1189,19 @@ if ('serviceWorker' in navigator) {
 
 // Cargar horas guardadas cuando el usuario inicia sesión
 document.addEventListener('DOMContentLoaded', () => {
-  setTimeout(loadSavedTimes, 1500);
+  setTimeout(() => {
+    loadSavedTimes();
+    startReminderCheck();
+  }, 1500);
 });
 
 // Verificar recordatorios cada minuto
-setInterval(() => {
+let reminderInterval = null;
+
+function startReminderCheck() {
+  if (reminderInterval) clearInterval(reminderInterval);
+  reminderInterval = setInterval(() => {
+  
   const now = new Date();
   const reminders = ['med1', 'glu1', 'glu2', 'med2', 'eje1'];
   reminders.forEach(id => {
@@ -1218,7 +1226,8 @@ setInterval(() => {
       }
     }
   });
-}, 60000);
+}, 10000); // cada 10 segundos para mayor precisión
+}
 </script>
 </body>
 </html>
