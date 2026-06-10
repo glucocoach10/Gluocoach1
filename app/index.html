@@ -622,7 +622,20 @@
     width: 20px; height: 20px; background: white; border-radius: 50%;
     transition: transform 0.2s;
   }
-  .toggle.on::after { transform: translateX(20px); }
+  .toggle.on::after { transform: translateX(20px); } 
+  .time-input {
+  background: var(--bg);
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  padding: 4px 8px;
+  font-size: 13px;
+  font-family: 'DM Sans', sans-serif;
+  color: var(--text);
+  outline: none;
+  margin-top: 4px;
+  cursor: pointer;
+}
+.time-input:focus { border-color: var(--accent); }
 
   /* MOBILE NAV */
   .mobile-nav {
@@ -856,61 +869,61 @@
         <h3>🔔 Recordatorios activos</h3>
         <p>Activa los recordatorios que necesites. El navegador te enviará notificaciones en los horarios configurados.</p>
 
-        <div class="reminder-item">
-          <div class="reminder-left">
-            <div class="reminder-emoji">💊</div>
-            <div>
-              <div class="reminder-name">Medicamento matutino</div>
-              <div class="reminder-time">8:00 AM todos los días</div>
-            </div>
-          </div>
-          <button class="toggle" id="toggle-med1" onclick="toggleReminder(this, 'med1', 8, 0, 'Hora de tu medicamento matutino 💊')"></button>
-        </div>
+<div class="reminder-item">
+  <div class="reminder-left">
+    <div class="reminder-emoji">💊</div>
+    <div>
+      <div class="reminder-name">Medicamento matutino</div>
+      <input type="time" class="time-input" id="time-med1" value="08:00">
+    </div>
+  </div>
+  <button class="toggle" id="toggle-med1" onclick="toggleReminderCustom(this, 'med1', 'time-med1', 'Hora de tu medicamento matutino 💊')"></button>
+</div>
 
-        <div class="reminder-item">
-          <div class="reminder-left">
-            <div class="reminder-emoji">📊</div>
-            <div>
-              <div class="reminder-name">Medir glucosa en ayunas</div>
-              <div class="reminder-time">7:00 AM todos los días</div>
-            </div>
-          </div>
-          <button class="toggle" id="toggle-glu1" onclick="toggleReminder(this, 'glu1', 7, 0, 'Mide tu glucosa en ayunas 📊')"></button>
-        </div>
+<div class="reminder-item">
+  <div class="reminder-left">
+    <div class="reminder-emoji">📊</div>
+    <div>
+      <div class="reminder-name">Medir glucosa en ayunas</div>
+      <input type="time" class="time-input" id="time-glu1" value="07:00">
+    </div>
+  </div>
+  <button class="toggle" id="toggle-glu1" onclick="toggleReminderCustom(this, 'glu1', 'time-glu1', 'Mide tu glucosa en ayunas 📊')"></button>
+</div>
 
-        <div class="reminder-item">
-          <div class="reminder-left">
-            <div class="reminder-emoji">🍽️</div>
-            <div>
-              <div class="reminder-name">Medir glucosa post-comida</div>
-              <div class="reminder-time">2:00 PM todos los días</div>
-            </div>
-          </div>
-          <button class="toggle" id="toggle-glu2" onclick="toggleReminder(this, 'glu2', 14, 0, 'Mide tu glucosa 2 horas después de comer 🍽️')"></button>
-        </div>
+<div class="reminder-item">
+  <div class="reminder-left">
+    <div class="reminder-emoji">🍽️</div>
+    <div>
+      <div class="reminder-name">Medir glucosa post-comida</div>
+      <input type="time" class="time-input" id="time-glu2" value="14:00">
+    </div>
+  </div>
+  <button class="toggle" id="toggle-glu2" onclick="toggleReminderCustom(this, 'glu2', 'time-glu2', 'Mide tu glucosa 2 horas después de comer 🍽️')"></button>
+</div>
 
-        <div class="reminder-item">
-          <div class="reminder-left">
-            <div class="reminder-emoji">💊</div>
-            <div>
-              <div class="reminder-name">Medicamento nocturno</div>
-              <div class="reminder-time">9:00 PM todos los días</div>
-            </div>
-          </div>
-          <button class="toggle" id="toggle-med2" onclick="toggleReminder(this, 'med2', 21, 0, 'Hora de tu medicamento nocturno 💊')"></button>
-        </div>
+<div class="reminder-item">
+  <div class="reminder-left">
+    <div class="reminder-emoji">💊</div>
+    <div>
+      <div class="reminder-name">Medicamento nocturno</div>
+      <input type="time" class="time-input" id="time-med2" value="21:00">
+    </div>
+  </div>
+  <button class="toggle" id="toggle-med2" onclick="toggleReminderCustom(this, 'med2', 'time-med2', 'Hora de tu medicamento nocturno 💊')"></button>
+</div>
 
-        <div class="reminder-item">
-          <div class="reminder-left">
-            <div class="reminder-emoji">🏃</div>
-            <div>
-              <div class="reminder-name">Hora de ejercicio</div>
-              <div class="reminder-time">6:00 PM todos los días</div>
-            </div>
-          </div>
-          <button class="toggle" id="toggle-eje1" onclick="toggleReminder(this, 'eje1', 18, 0, '¡Es hora de moverte! 🏃 Tu rutina de ejercicio te espera.')"></button>
-        </div>
-
+<div class="reminder-item">
+  <div class="reminder-left">
+    <div class="reminder-emoji">🏃</div>
+    <div>
+      <div class="reminder-name">Hora de ejercicio</div>
+      <input type="time" class="time-input" id="time-eje1" value="18:00">
+    </div>
+  </div>
+  <button class="toggle" id="toggle-eje1" onclick="toggleReminderCustom(this, 'eje1', 'time-eje1', '¡Es hora de moverte! 🏃 Tu rutina de ejercicio te espera.')"></button>
+</div>
+              
       </div>
 
       <div class="reminder-card">
@@ -1106,7 +1119,13 @@ async function sendMessage() {
 }
 
 // REMINDERS
-async function toggleReminder(btn, id, hour, minute, message) {
+async function toggleReminderCustom(btn, id, timeInputId, message) {
+  const timeInput = document.getElementById(timeInputId);
+  const [hour, minute] = timeInput.value.split(':').map(Number);
+  timeInput.disabled = !btn.classList.contains('on');
+  await toggleReminder(btn, id, hour, minute, message);
+}
+  async function toggleReminder(btn, id, hour, minute, message) {
   const isOn = btn.classList.contains('on');
   if (isOn) {
     btn.classList.remove('on');
