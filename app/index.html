@@ -112,18 +112,37 @@
     }
   };
 
-  function getGlucoseStatus(value) {
+  function getGlucoseStatus(value, moment) {
     if (value < 70) return { label: '⚠️ Baja', color: '#c84b1f', bg: '#fde8e0' };
-    if (value <= 99) return { label: '✓ Normal', color: '#1a6b3c', bg: '#e8f5ed' };
-    if (value <= 125) return { label: '⚡ Prediabetes', color: '#d97706', bg: '#fef3c7' };
-    if (value <= 180) return { label: '↑ Alta', color: '#c84b1f', bg: '#fde8e0' };
-    return { label: '🚨 Muy alta', color: '#991b1b', bg: '#fee2e2' };
+    
+    if (moment === '2h después de comer') {
+      if (value < 140) return { label: '✓ Normal', color: '#1a6b3c', bg: '#e8f5ed' };
+      if (value < 200) return { label: '⚡ Elevada', color: '#d97706', bg: '#fef3c7' };
+      return { label: '🚨 Muy alta', color: '#991b1b', bg: '#fee2e2' };
+    }
+    
+    if (moment === 'Antes de dormir') {
+      if (value < 120) return { label: '✓ Normal', color: '#1a6b3c', bg: '#e8f5ed' };
+      if (value < 150) return { label: '⚡ Elevada', color: '#d97706', bg: '#fef3c7' };
+      return { label: '🚨 Muy alta', color: '#991b1b', bg: '#fee2e2' };
+    }
+
+    if (moment === 'Antes de comer') {
+      if (value < 100) return { label: '✓ Normal', color: '#1a6b3c', bg: '#e8f5ed' };
+      if (value < 126) return { label: '⚡ Elevada', color: '#d97706', bg: '#fef3c7' };
+      return { label: '🚨 Muy alta', color: '#991b1b', bg: '#fee2e2' };
+    }
+
+    // Ayunas y madrugada
+    if (value < 100) return { label: '✓ Normal', color: '#1a6b3c', bg: '#e8f5ed' };
+    if (value < 126) return { label: '⚡ Prediabetes', color: '#d97706', bg: '#fef3c7' };
+    return { label: '🚨 Diabetes', color: '#991b1b', bg: '#fee2e2' };
   }
 
   function updateSidebarGlucose(readings) {
     if (readings.length === 0) return;
     const latest = readings[0];
-    const status = getGlucoseStatus(latest.value);
+    const status = getGlucoseStatus(latest.value, latest.moment);
     document.getElementById('sidebarGlucose').textContent = latest.value;
     document.getElementById('sidebarGlucoseStatus').textContent = status.label;
   }
@@ -135,7 +154,7 @@
       return;
     }
     container.innerHTML = readings.slice(0, 10).map(r => {
-      const status = getGlucoseStatus(r.value);
+      const status = getGlucoseStatus(r.value, r.moment);
       const date = r.timestamp?.toDate ? r.timestamp.toDate() : new Date(r.timestamp);
       const dateStr = date.toLocaleDateString('es-MX', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
       return `
