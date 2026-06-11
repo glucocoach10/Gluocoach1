@@ -1180,9 +1180,12 @@ if ('serviceWorker' in navigator) {
 
 // Cargar horas guardadas cuando el usuario inicia sesión
 document.addEventListener('DOMContentLoaded', () => {
-  setTimeout(() => {
+  setTimeout(async () => {
     loadSavedTimes();
     startReminderCheck();
+    if (Notification.permission === 'granted') {
+      await requestNotificationToken();
+    }
   }, 1500);
 });
 
