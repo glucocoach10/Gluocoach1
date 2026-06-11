@@ -1151,13 +1151,12 @@ function loadSavedTimes() {
   });
 }
 
-
-  
-  async function toggleReminder(btn, id, hour, minute, message) {
+async function toggleReminder(btn, id, hour, minute, message) {
   const isOn = btn.classList.contains('on');
   if (isOn) {
     btn.classList.remove('on');
     if (reminderTimers[id]) clearInterval(reminderTimers[id]);
+    localStorage.setItem('glucocoach_active_' + id, 'false');
     return;
   }
   if (!('Notification' in window)) {
@@ -1170,19 +1169,11 @@ function loadSavedTimes() {
     return;
   }
   btn.classList.add('on');
-  const checkTime = () => {
-    const now = new Date();
-    if (now.getHours() === hour && now.getMinutes() === minute) {
-      new Notification('GlucoCoach 🩺', {
-        body: message,
-        icon: '/icon-192.png'
-      });
-    }
-  };
-  reminderTimers[id] = setInterval(checkTime, 60000);
-  checkTime();
+  localStorage.setItem('glucocoach_active_' + id, 'true');
+  await requestNotificationToken();
 }
-
+  
+  
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('/sw.js');
 }
@@ -1198,36 +1189,56 @@ document.addEventListener('DOMContentLoaded', () => {
 // Verificar recordatorios cada minuto
 let reminderInterval = null;
 
+async function requestNotificationToken() {
+  try {
+    const { getMessaging, getToken } = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging.js');
+    const messaging = getMessaging();
+    const token = await getToken(messaging, {
+      vapidKey: 'BBBo0G2JJmdiukRHAZbRQkb_OSBSWSvVK_ZCsIdYHS4hS6AeTbEc-kz7C4Vh-xxFDGz2KrsDm6yD1iy_wPK91iA'
+    });
+    if (token) {
+      localStorage.setItem('fcm_token', token);
+      console.log('FCM Token:', token);
+    }
+    return token;
+  } catch(e) {
+    console.error('Error obteniendo token FCM:', e);
+    return null;
+  }
+}
+
 function startReminderCheck() {
   if (reminderInterval) clearInterval(reminderInterval);
   reminderInterval = setInterval(() => {
-  
-  const now = new Date();
-  const reminders = ['med1', 'glu1', 'glu2', 'med2', 'eje1'];
-  reminders.forEach(id => {
-    const toggle = document.getElementById('toggle-' + id);
-    if (!toggle?.classList.contains('on')) return;
-    const savedTime = localStorage.getItem('glucocoach_time_' + id);
-    if (!savedTime) return;
-    const [h, m] = savedTime.split(':').map(Number);
-    if (now.getHours() === h && now.getMinutes() === m) {
-      const messages = {
-        med1: 'Hora de tu medicamento matutino 💊',
-        glu1: 'Mide tu glucosa en ayunas 📊',
-        glu2: 'Mide tu glucosa 2 horas después de comer 🍽️',
-        med2: 'Hora de tu medicamento nocturno 💊',
-        eje1: '¡Es hora de moverte! 🏃'
-      };
-      if (Notification.permission === 'granted') {
-        new Notification('GlucoCoach 🩺', {
-          body: messages[id],
-          icon: '/icon-192.png'
-        });
+    const now = new Date();
+    const reminders = ['med1', 'glu1', 'glu2', 'med2', 'eje1'];
+    reminders.forEach(id => {
+      const toggle = document.getElementById('toggle-' + id);
+      if (!toggle?.classList.contains('on')) return;
+      const savedTime = localStorage.getItem('glucocoach_time_' + id);
+      if (!savedTime) return;
+      const [h, m] = savedTime.split(':').map(Number);
+      if (now.getHours() === h && now.getMinutes() === m) {
+        const messages = {
+          med1: 'Hora de tu medicamento matutino 💊',
+          glu1: 'Mide tu glucosa en ayunas 📊',
+          glu2: 'Mide tu glucosa 2 horas después de comer 🍽️',
+          med2: 'Hora de tu medicamento nocturno 💊',
+          eje1: '¡Es hora de moverte! 🏃'
+        };
+        if (Notification.permission === 'granted') {
+          new Notification('GlucoCoach 🩺', {
+            body: messages[id],
+            icon: '/icon-192.png'
+          });
+        }
       }
-    }
-  });
-}, 10000); // cada 10 segundos para mayor precisión
+    });
+  }, 10000);
 }
+
+
+  
 </script>
 </body>
 </html>
