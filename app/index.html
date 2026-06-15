@@ -974,6 +974,13 @@ function calculateStats(readings) {
   <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px" id="achievements">
   </div>
 </div>
+
+<!-- PDF REPORTE -->
+<div class="panel-card">
+  <h3>👨‍⚕️ Reporte para tu médico</h3>
+  <p style="font-size:13px;color:var(--muted);line-height:1.6;margin-bottom:16px">Genera un resumen de tus últimas 4 semanas listo para llevar a tu consulta médica.</p>
+  <button class="btn-save" onclick="generatePDF()" style="background:#1a6b3c">📄 Generar reporte PDF</button>
+</div>
       
 <!-- ESTADÍSTICAS -->
 <div class="panel-card" id="statsCard">
