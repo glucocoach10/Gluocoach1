@@ -1,7 +1,8 @@
-import Stripe from 'stripe';
+import pkg from 'firebase-admin';
+const { credential } = pkg;
 import { initializeApp, getApps } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
-import { credential } from 'firebase-admin';
+import Stripe from 'stripe';
 
 if (!getApps().length) {
   initializeApp({
@@ -19,13 +20,10 @@ export default async function handler(req, res) {
   if (!userId || !email) return res.status(400).json({ error: 'Missing data' });
 
   try {
-    // Buscar usuario en Firestore
     const userRef = db.collection('users').doc(userId);
     const userDoc = await userRef.get();
-
     const now = new Date();
 
-    // Si no existe, crear con fecha de inicio
     if (!userDoc.exists) {
       await userRef.set({
         userId,
@@ -39,16 +37,13 @@ export default async function handler(req, res) {
 
     const userData = userDoc.data();
 
-    // Si tiene suscripción activa
     if (userData.subscriptionStatus === 'active') {
       return res.status(200).json({ status: 'active' });
     }
 
-    // Si está en periodo de prueba
     if (userData.subscriptionStatus === 'trial') {
       const trialEndsAt = userData.trialEndsAt?.toDate ? userData.trialEndsAt.toDate() : new Date(userData.trialEndsAt);
       const daysLeft = Math.ceil((trialEndsAt - now) / (1000 * 60 * 60 * 24));
-
       if (daysLeft > 0) {
         return res.status(200).json({ status: 'trial', daysLeft });
       } else {
@@ -57,11 +52,10 @@ export default async function handler(req, res) {
       }
     }
 
-    // Expirado o inactivo
     return res.status(200).json({ status: 'expired' });
 
   } catch(e) {
     console.error('Error:', e);
-    return res.status(500).json({ error: 'Server error' });
+    return res.status(500).json({ error: 'Server error', details: e.message });
   }
 }
