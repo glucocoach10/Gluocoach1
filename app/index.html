@@ -17,7 +17,7 @@
 <script type="module">
   import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
   import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
-  import { getFirestore, collection, addDoc, getDocs, query, where, orderBy, limit } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+  import { getFirestore, collection, addDoc, getDocs, query, where, orderBy, limit, deleteDoc, doc as firestoreDoc } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 
   const firebaseConfig = {
     apiKey: "AIzaSyDfwVmBY7Td5C7LwCUY6YvI_OVcp2Q5vYk",
@@ -34,7 +34,6 @@
   let currentUser = null;
   let glucoseChart = null;
 
-  // Auth state
   onAuthStateChanged(auth, user => {
     currentUser = user;
     if (user) {
@@ -44,13 +43,13 @@
       document.getElementById('userAvatar').textContent = user.displayName?.[0] || '👤';
       loadGlucoseHistory();
       loadFoodHistory();
+      checkPrivacyAccepted();
     } else {
       document.getElementById('loginScreen').style.display = 'flex';
       document.getElementById('mainApp').style.display = 'none';
     }
   });
 
-  // Login with Google
   window.loginWithGoogle = async () => {
     try {
       const provider = new GoogleAuthProvider();
@@ -60,362 +59,229 @@
     }
   };
 
-window.showProfile = () => {
-  document.getElementById('modalName').textContent = currentUser?.displayName || 'Usuario';
-  document.getElementById('modalEmail').textContent = currentUser?.email || '';
-  document.getElementById('modalAvatar').textContent = currentUser?.displayName?.[0] || '👤';
-  document.getElementById('profileModal').style.display = 'flex';
-};
+  window.logout = async () => { await signOut(auth); };
 
-window.closeProfile = () => {
-  document.getElementById('profileModal').style.display = 'none';
-};
-
-window.confirmDeleteData = async () => {
-  const confirmed = confirm('¿Estás seguro? Se eliminarán TODOS tus registros de glucosa, comidas y datos. Esta acción no se puede deshacer.');
-  if (!confirmed) return;
-
-  try {
-    const collections = ['glucose_readings', 'food_diary'];
-    for (const col of collections) {
-      const q = query(
-        collection(db, col),
-        where('userId', '==', currentUser.uid)
-      );
-      const snapshot = await getDocs(q);
-      const { deleteDoc, doc: firestoreDoc } = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js');
-      for (const d of snapshot.docs) {
-        await deleteDoc(firestoreDoc(db, col, d.id));
-      }
-    }
-    alert('✅ Todos tus datos han sido eliminados correctamente.');
-    closeProfile();
-    loadGlucoseHistory();
-    loadFoodHistory();
-  } catch(e) {
-    alert('Error al eliminar datos. Intenta de nuevo.');
-  }
-};
-
-
-  
-  // Logout
-  window.logout = async () => {
-    await signOut(auth);
+  window.acceptPrivacy = () => {
+    localStorage.setItem('glucocoach_privacy_accepted', 'true');
+    document.getElementById('privacyModal').style.display = 'none';
   };
 
-  // Save glucose
+  window.declinePrivacy = () => {
+    document.getElementById('privacyModal').style.display = 'none';
+    signOut(auth);
+  };
+
+  function checkPrivacyAccepted() {
+    const accepted = localStorage.getItem('glucocoach_privacy_accepted');
+    if (!accepted) document.getElementById('privacyModal').style.display = 'flex';
+  }
+
+  window.showProfile = () => {
+    document.getElementById('modalName').textContent = currentUser?.displayName || 'Usuario';
+    document.getElementById('modalEmail').textContent = currentUser?.email || '';
+    document.getElementById('modalAvatar').textContent = currentUser?.displayName?.[0] || '👤';
+    document.getElementById('profileModal').style.display = 'flex';
+  };
+
+  window.closeProfile = () => { document.getElementById('profileModal').style.display = 'none'; };
+
+  window.confirmDeleteData = async () => {
+    const confirmed = confirm('¿Estás seguro? Se eliminarán TODOS tus registros. Esta acción no se puede deshacer.');
+    if (!confirmed) return;
+    try {
+      for (const col of ['glucose_readings', 'food_diary']) {
+        const q = query(collection(db, col), where('userId', '==', currentUser.uid));
+        const snapshot = await getDocs(q);
+        for (const d of snapshot.docs) await deleteDoc(firestoreDoc(db, col, d.id));
+      }
+      alert('✅ Todos tus datos han sido eliminados correctamente.');
+      window.closeProfile();
+      loadGlucoseHistory();
+      loadFoodHistory();
+    } catch(e) { alert('Error al eliminar datos. Intenta de nuevo.'); }
+  };
+
   window.saveGlucose = async () => {
     if (!currentUser) return;
     const value = parseInt(document.getElementById('glucoseInput').value);
     const notes = document.getElementById('glucoseNotes').value;
     const moment = document.getElementById('glucoseMoment').value;
-    if (!value || value < 30 || value > 600) {
-      alert('Por favor ingresa un valor válido entre 30 y 600 mg/dL');
-      return;
-    }
+    if (!value || value < 30 || value > 600) { alert('Por favor ingresa un valor válido entre 30 y 600 mg/dL'); return; }
     try {
-      await addDoc(collection(db, 'glucose_readings'), {
-        userId: currentUser.uid,
-        value,
-        notes,
-        moment,
-        timestamp: new Date()
-      });
+      await addDoc(collection(db, 'glucose_readings'), { userId: currentUser.uid, value, notes, moment, timestamp: new Date() });
       document.getElementById('glucoseInput').value = '';
       document.getElementById('glucoseNotes').value = '';
       document.getElementById('saveSuccess').style.display = 'flex';
       setTimeout(() => document.getElementById('saveSuccess').style.display = 'none', 2500);
       loadGlucoseHistory();
-    } catch(e) {
-      alert('Error al guardar. Intenta de nuevo.');
-    }
+    } catch(e) { alert('Error al guardar. Intenta de nuevo.'); }
   };
 
+  let currentFoodAnalysis = null;
 
-let currentFoodAnalysis = null;
-
-window.analyzeFood = async function() {
-  const food = document.getElementById('foodInput').value.trim();
-  const moment = document.getElementById('foodMoment').value;
-  const portion = document.getElementById('foodPortion').value;
-
-  if (!food) {
-    alert('Por favor describe lo que comiste.');
-    return;
-  }
-
-  const btn = document.querySelector('#tab-food .btn-save');
-  btn.textContent = '🤖 Analizando...';
-  btn.disabled = true;
-
-  try {
-    const response = await fetch('/api/chat', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-5',
-        max_tokens: 500,
-        system: 'Eres GlucoCoach, especialista en nutrición para diabéticos. Analiza la comida descrita y responde en español con: 1) Impacto glucémico estimado (bajo/medio/alto) 2) Por qué sube o no la glucosa 3) Un consejo práctico. Sé conciso, máximo 4 líneas. No uses markdown ni asteriscos.',
-        messages: [{ role: 'user', content: `Comí: ${food}. Porción: ${portion}. Momento: ${moment}` }]
-      })
-    });
-
-    const data = await response.json();
-    const analysis = data.content?.map(c => c.text || '').join('') || 'No se pudo analizar.';
-
-    currentFoodAnalysis = { food, moment, portion, analysis };
-
-    document.getElementById('foodAnalysisText').textContent = analysis;
-    document.getElementById('foodAnalysis').style.display = 'block';
-
-  } catch(e) {
-    alert('Error al analizar. Intenta de nuevo.');
-  }
-
-  btn.textContent = '🤖 Analizar con IA';
-  btn.disabled = false;
-};
-
-window.saveFood = async function() {
-  if (!currentFoodAnalysis || !currentUser) return;
-
-  try {
-    await addDoc(collection(db, 'food_diary'), {
-      userId: currentUser.uid,
-      ...currentFoodAnalysis,
-      timestamp: new Date()
-    });
-
-    document.getElementById('foodInput').value = '';
-    document.getElementById('foodAnalysis').style.display = 'none';
-    currentFoodAnalysis = null;
-    loadFoodHistory();
-
-    alert('✅ Comida guardada correctamente');
-  } catch(e) {
-    alert('Error al guardar. Intenta de nuevo.');
-  }
-};
-
-window.loadFoodHistory = async function() {
-  if (!currentUser) return;
-  try {
-    const q = query(
-      collection(db, 'food_diary'),
-      where('userId', '==', currentUser.uid),
-      orderBy('timestamp', 'desc'),
-      limit(20)
-    );
-    const snapshot = await getDocs(q);
-    const foods = [];
-    snapshot.forEach(d => foods.push({ id: d.id, ...d.data() }));
-    renderFoodHistory(foods);
-  } catch(e) {
-    console.error('Error cargando comidas:', e);
-  }
-};
-
-function renderFoodHistory(foods) {
-  const container = document.getElementById('foodHistory');
-  if (foods.length === 0) {
-    container.innerHTML = '<p style="color:var(--muted);font-size:13px;text-align:center;padding:20px">Aún no tienes comidas registradas.</p>';
-    return;
-  }
-
-  const impactColor = (analysis) => {
-    if (analysis?.toLowerCase().includes('alto')) return { bg: '#fde8e0', color: '#c84b1f', label: '↑ Alto' };
-    if (analysis?.toLowerCase().includes('medio')) return { bg: '#fef3c7', color: '#d97706', label: '→ Medio' };
-    return { bg: '#e8f5ed', color: '#1a6b3c', label: '↓ Bajo' };
+  window.analyzeFood = async function() {
+    const food = document.getElementById('foodInput').value.trim();
+    const moment = document.getElementById('foodMoment').value;
+    const portion = document.getElementById('foodPortion').value;
+    if (!food) { alert('Por favor describe lo que comiste.'); return; }
+    const btn = document.querySelector('#tab-food .btn-save');
+    btn.textContent = '🤖 Analizando...';
+    btn.disabled = true;
+    try {
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-5', max_tokens: 500,
+          system: 'Eres GlucoCoach, especialista en nutrición para diabéticos de toda Latinoamérica. Analiza la comida descrita y responde en español con: 1) Impacto glucémico estimado (bajo/medio/alto) 2) Por qué sube o no la glucosa 3) Un consejo práctico. Sé conciso, máximo 4 líneas. No uses markdown ni asteriscos.',
+          messages: [{ role: 'user', content: `Comí: ${food}. Porción: ${portion}. Momento: ${moment}` }]
+        })
+      });
+      const data = await response.json();
+      const analysis = data.content?.map(c => c.text || '').join('') || 'No se pudo analizar.';
+      currentFoodAnalysis = { food, moment, portion, analysis };
+      document.getElementById('foodAnalysisText').textContent = analysis;
+      document.getElementById('foodAnalysis').style.display = 'block';
+    } catch(e) { alert('Error al analizar. Intenta de nuevo.'); }
+    btn.textContent = '🤖 Analizar con IA';
+    btn.disabled = false;
   };
 
-  container.innerHTML = foods.map(f => {
-    const date = f.timestamp?.toDate ? f.timestamp.toDate() : new Date(f.timestamp);
-    const dateStr = date.toLocaleDateString('es-MX', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
-    const impact = impactColor(f.analysis);
-    return `
-      <div style="padding:12px 0;border-bottom:1px solid var(--border)">
+  window.saveFood = async function() {
+    if (!currentFoodAnalysis || !currentUser) return;
+    try {
+      await addDoc(collection(db, 'food_diary'), { userId: currentUser.uid, ...currentFoodAnalysis, timestamp: new Date() });
+      document.getElementById('foodInput').value = '';
+      document.getElementById('foodAnalysis').style.display = 'none';
+      currentFoodAnalysis = null;
+      loadFoodHistory();
+      alert('✅ Comida guardada correctamente');
+    } catch(e) { alert('Error al guardar. Intenta de nuevo.'); }
+  };
+
+  window.loadFoodHistory = async function() {
+    if (!currentUser) return;
+    try {
+      const q = query(collection(db, 'food_diary'), where('userId', '==', currentUser.uid), orderBy('timestamp', 'desc'), limit(20));
+      const snapshot = await getDocs(q);
+      const foods = [];
+      snapshot.forEach(d => foods.push({ id: d.id, ...d.data() }));
+      renderFoodHistory(foods);
+    } catch(e) { console.error('Error cargando comidas:', e); }
+  };
+
+  function renderFoodHistory(foods) {
+    const container = document.getElementById('foodHistory');
+    if (foods.length === 0) { container.innerHTML = '<p style="color:var(--muted);font-size:13px;text-align:center;padding:20px">Aún no tienes comidas registradas.</p>'; return; }
+    const impactColor = (analysis) => {
+      if (analysis?.toLowerCase().includes('alto')) return { bg: '#fde8e0', color: '#c84b1f', label: '↑ Alto' };
+      if (analysis?.toLowerCase().includes('medio')) return { bg: '#fef3c7', color: '#d97706', label: '→ Medio' };
+      return { bg: '#e8f5ed', color: '#1a6b3c', label: '↓ Bajo' };
+    };
+    container.innerHTML = foods.map(f => {
+      const date = f.timestamp?.toDate ? f.timestamp.toDate() : new Date(f.timestamp);
+      const dateStr = date.toLocaleDateString('es-MX', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+      const impact = impactColor(f.analysis);
+      return `<div style="padding:12px 0;border-bottom:1px solid var(--border)">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">
-          <div>
-            <div style="font-size:14px;font-weight:500">${f.food}</div>
-            <div style="font-size:12px;color:var(--muted);margin-top:2px">${f.moment} · ${f.portion} · ${dateStr}</div>
-          </div>
+          <div><div style="font-size:14px;font-weight:500">${f.food}</div>
+          <div style="font-size:12px;color:var(--muted);margin-top:2px">${f.moment} · ${f.portion} · ${dateStr}</div></div>
           <span style="font-size:11px;padding:3px 8px;border-radius:20px;background:${impact.bg};color:${impact.color};font-weight:500;white-space:nowrap;margin-left:8px">${impact.label}</span>
         </div>
         <div style="font-size:12px;color:var(--muted);line-height:1.5;background:var(--bg);border-radius:8px;padding:8px">${f.analysis}</div>
       </div>`;
-  }).join('');
-}
-
-
-  
-window.generatePDF = async function() {
-  const { jsPDF } = window.jspdf;
-  const doc = new jsPDF();
-  const readings = [];
-
-  try {
-    const q = query(
-      collection(db, 'glucose_readings'),
-      where('userId', '==', currentUser.uid),
-      orderBy('timestamp', 'desc')
-    );
-    const snapshot = await getDocs(q);
-    snapshot.forEach(d => readings.push({ id: d.id, ...d.data() }));
-  } catch(e) {
-    alert('Error al obtener datos. Intenta de nuevo.');
-    return;
+    }).join('');
   }
 
-  if (readings.length === 0) {
-    alert('No tienes lecturas registradas aún.');
-    return;
-  }
-
-  const GREEN = [26, 107, 60];
-  const GRAY = [120, 112, 96];
-  const BLACK = [28, 26, 22];
-
-  doc.setFillColor(...GREEN);
-  doc.rect(0, 0, 210, 40, 'F');
-  doc.setTextColor(255, 255, 255);
-  doc.setFontSize(22);
-  doc.setFont('helvetica', 'bold');
-  doc.text('GlucoCoach', 14, 18);
-  doc.setFontSize(11);
-  doc.setFont('helvetica', 'normal');
-  doc.text('Reporte de control glucémico', 14, 26);
-  doc.text(`Generado: ${new Date().toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' })}`, 14, 33);
-  doc.text(`Paciente: ${currentUser.displayName || 'Usuario'}`, 120, 26);
-
-  const values = readings.map(r => r.value);
-  const avg = Math.round(values.reduce((a, b) => a + b, 0) / values.length);
-  const max = Math.max(...values);
-  const min = Math.min(...values);
-  const inRange = readings.filter(r => r.value >= 70 && r.value <= 140).length;
-  const inRangePct = Math.round((inRange / readings.length) * 100);
-
-  doc.setTextColor(...BLACK);
-  doc.setFontSize(14);
-  doc.setFont('helvetica', 'bold');
-  doc.text('Resumen del período', 14, 55);
-
-  doc.setFontSize(10);
-  doc.setFont('helvetica', 'normal');
-  doc.setTextColor(...GRAY);
-
-  const stats = [
-    ['Total de lecturas', readings.length],
-    ['Promedio de glucosa', `${avg} mg/dL`],
-    ['Valor máximo', `${max} mg/dL`],
-    ['Valor mínimo', `${min} mg/dL`],
-    ['Tiempo en rango (70-140)', `${inRangePct}%`],
-  ];
-
-  let y = 65;
-  stats.forEach(([label, value]) => {
-    doc.setTextColor(...GRAY);
-    doc.text(label, 14, y);
-    doc.setTextColor(...BLACK);
-    doc.setFont('helvetica', 'bold');
-    doc.text(String(value), 120, y);
+  window.generatePDF = async function() {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    const readings = [];
+    try {
+      const q = query(collection(db, 'glucose_readings'), where('userId', '==', currentUser.uid), orderBy('timestamp', 'desc'));
+      const snapshot = await getDocs(q);
+      snapshot.forEach(d => readings.push({ id: d.id, ...d.data() }));
+    } catch(e) { alert('Error al obtener datos. Intenta de nuevo.'); return; }
+    if (readings.length === 0) { alert('No tienes lecturas registradas aún.'); return; }
+    const GREEN = [26, 107, 60], GRAY = [120, 112, 96], BLACK = [28, 26, 22];
+    doc.setFillColor(...GREEN); doc.rect(0, 0, 210, 40, 'F');
+    doc.setTextColor(255, 255, 255); doc.setFontSize(22); doc.setFont('helvetica', 'bold');
+    doc.text('GlucoCoach', 14, 18); doc.setFontSize(11); doc.setFont('helvetica', 'normal');
+    doc.text('Reporte de control glucemico', 14, 26);
+    doc.text(`Generado: ${new Date().toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' })}`, 14, 33);
+    doc.text(`Paciente: ${currentUser.displayName || 'Usuario'}`, 120, 26);
+    const values = readings.map(r => r.value);
+    const avg = Math.round(values.reduce((a, b) => a + b, 0) / values.length);
+    const max = Math.max(...values), min = Math.min(...values);
+    const inRange = readings.filter(r => r.value >= 70 && r.value <= 140).length;
+    const inRangePct = Math.round((inRange / readings.length) * 100);
+    doc.setTextColor(...BLACK); doc.setFontSize(14); doc.setFont('helvetica', 'bold');
+    doc.text('Resumen del periodo', 14, 55);
+    doc.setFontSize(10); doc.setFont('helvetica', 'normal'); doc.setTextColor(...GRAY);
+    const stats = [['Total de lecturas', String(readings.length)], ['Promedio de glucosa', `${avg} mg/dL`], ['Valor maximo', `${max} mg/dL`], ['Valor minimo', `${min} mg/dL`], ['Tiempo en rango (70-140)', `${inRangePct}%`]];
+    let y = 65;
+    stats.forEach(([label, value]) => {
+      doc.setTextColor(...GRAY); doc.text(label, 14, y);
+      doc.setTextColor(...BLACK); doc.setFont('helvetica', 'bold'); doc.text(value, 120, y);
+      doc.setFont('helvetica', 'normal'); y += 8;
+    });
+    y += 10; doc.setTextColor(...BLACK); doc.setFontSize(14); doc.setFont('helvetica', 'bold');
+    doc.text('Ultimas 20 lecturas', 14, y); y += 8;
+    doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(...GRAY);
+    doc.text('Fecha', 14, y); doc.text('Momento', 70, y); doc.text('Glucosa', 130, y); doc.text('Estado', 160, y);
+    y += 4; doc.setDrawColor(...GRAY); doc.line(14, y, 196, y); y += 6;
     doc.setFont('helvetica', 'normal');
-    y += 8;
-  });
+    readings.slice(0, 20).forEach(r => {
+      const date = r.timestamp?.toDate ? r.timestamp.toDate() : new Date(r.timestamp);
+      const dateStr = date.toLocaleDateString('es-MX', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+      const status = getGlucoseStatus(r.value, r.moment);
+      doc.setTextColor(...BLACK);
+      doc.text(dateStr, 14, y); doc.text(r.moment || '—', 70, y); doc.text(`${r.value} mg/dL`, 130, y);
+      doc.setTextColor(r.value < 70 ? 200 : 26, r.value >= 70 && r.value <= 140 ? 107 : 50, r.value >= 70 && r.value <= 140 ? 60 : 31);
+      doc.text(status.label.replace(/[^\w\s]/gi, '').trim(), 160, y); y += 7;
+      if (y > 270) { doc.addPage(); y = 20; }
+    });
+    const pageCount = doc.internal.getNumberOfPages();
+    for (let i = 1; i <= pageCount; i++) {
+      doc.setPage(i); doc.setFontSize(8); doc.setTextColor(...GRAY);
+      doc.text('GlucoCoach — Este reporte es informativo y no reemplaza la consulta medica profesional.', 14, 290);
+      doc.text(`Pagina ${i} de ${pageCount}`, 180, 290);
+    }
+    doc.save(`glucocoach-reporte-${new Date().toISOString().slice(0,10)}.pdf`);
+  };
 
-  y += 10;
-  doc.setTextColor(...BLACK);
-  doc.setFontSize(14);
-  doc.setFont('helvetica', 'bold');
-  doc.text('Últimas 20 lecturas', 14, y);
-  y += 8;
-
-  doc.setFontSize(9);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(...GRAY);
-  doc.text('Fecha', 14, y);
-  doc.text('Momento', 70, y);
-  doc.text('Glucosa', 130, y);
-  doc.text('Estado', 160, y);
-  y += 4;
-  doc.setDrawColor(...GRAY);
-  doc.line(14, y, 196, y);
-  y += 6;
-
-  doc.setFont('helvetica', 'normal');
-  readings.slice(0, 20).forEach(r => {
-    const date = r.timestamp?.toDate ? r.timestamp.toDate() : new Date(r.timestamp);
-    const dateStr = date.toLocaleDateString('es-MX', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
-    const status = getGlucoseStatus(r.value, r.moment);
-    doc.setTextColor(...BLACK);
-    doc.text(dateStr, 14, y);
-    doc.text(r.moment || '—', 70, y);
-    doc.text(`${r.value} mg/dL`, 130, y);
-    doc.setTextColor(r.value < 70 ? 200 : 26, r.value >= 70 && r.value <= 140 ? 107 : 50, r.value >= 70 && r.value <= 140 ? 60 : 31);
-    doc.text(status.label.replace(/[^\w\s]/gi, '').trim(), 160, y);
-    y += 7;
-    if (y > 270) { doc.addPage(); y = 20; }
-  });
-
-  const pageCount = doc.internal.getNumberOfPages();
-  for (let i = 1; i <= pageCount; i++) {
-    doc.setPage(i);
-    doc.setFontSize(8);
-    doc.setTextColor(...GRAY);
-    doc.text('GlucoCoach — Este reporte es informativo y no reemplaza la consulta médica profesional.', 14, 290);
-    doc.text(`Página ${i} de ${pageCount}`, 180, 290);
-  }
-
-  doc.save(`glucocoach-reporte-${new Date().toISOString().slice(0,10)}.pdf`);
-};
-
-
-  
-  // Load history
   window.loadGlucoseHistory = async () => {
     if (!currentUser) return;
     try {
-      const q = query(
-        collection(db, 'glucose_readings'),
-        where('userId', '==', currentUser.uid),
-        orderBy('timestamp', 'desc'),
-        limit(30)
-      );
+      const q = query(collection(db, 'glucose_readings'), where('userId', '==', currentUser.uid), orderBy('timestamp', 'desc'), limit(30));
       const snapshot = await getDocs(q);
       const readings = [];
       snapshot.forEach(doc => readings.push({ id: doc.id, ...doc.data() }));
       renderHistory(readings);
-     renderChart(readings);
-     calculateStats(readings);
-     calculateStreakAndAchievements(readings);
+      renderChart(readings);
+      calculateStats(readings);
+      calculateStreakAndAchievements(readings);
       updateSidebarGlucose(readings);
-    } catch(e) {
-      console.error('Error loading history:', e);
-    }
+    } catch(e) { console.error('Error loading history:', e); }
   };
 
   function getGlucoseStatus(value, moment) {
     if (value < 70) return { label: '⚠️ Baja', color: '#c84b1f', bg: '#fde8e0' };
-    
     if (moment === '2h después de comer') {
       if (value < 140) return { label: '✓ Normal', color: '#1a6b3c', bg: '#e8f5ed' };
       if (value < 200) return { label: '⚡ Elevada', color: '#d97706', bg: '#fef3c7' };
       return { label: '🚨 Muy alta', color: '#991b1b', bg: '#fee2e2' };
     }
-    
     if (moment === 'Antes de dormir') {
       if (value < 120) return { label: '✓ Normal', color: '#1a6b3c', bg: '#e8f5ed' };
       if (value < 150) return { label: '⚡ Elevada', color: '#d97706', bg: '#fef3c7' };
       return { label: '🚨 Muy alta', color: '#991b1b', bg: '#fee2e2' };
     }
-
     if (moment === 'Antes de comer') {
       if (value < 100) return { label: '✓ Normal', color: '#1a6b3c', bg: '#e8f5ed' };
       if (value < 126) return { label: '⚡ Elevada', color: '#d97706', bg: '#fef3c7' };
       return { label: '🚨 Muy alta', color: '#991b1b', bg: '#fee2e2' };
     }
-
-    // Ayunas y madrugada
     if (value < 100) return { label: '✓ Normal', color: '#1a6b3c', bg: '#e8f5ed' };
     if (value < 126) return { label: '⚡ Prediabetes', color: '#d97706', bg: '#fef3c7' };
     return { label: '🚨 Diabetes', color: '#991b1b', bg: '#fee2e2' };
@@ -429,160 +295,87 @@ window.generatePDF = async function() {
     document.getElementById('sidebarGlucoseStatus').textContent = status.label;
   }
 
-
-
-  
-function calculateStreakAndAchievements(readings) {
-  if (readings.length === 0) {
-    document.getElementById('streak-count').textContent = '0';
-    return;
-  }
-
-  // Calcular racha de días consecutivos
-  const dates = readings.map(r => {
-    const d = r.timestamp?.toDate ? r.timestamp.toDate() : new Date(r.timestamp);
-    return d.toDateString();
-  });
-  const uniqueDates = [...new Set(dates)];
-
-  let streak = 0;
-  const today = new Date();
-  for (let i = 0; i < 365; i++) {
-    const day = new Date(today);
-    day.setDate(today.getDate() - i);
-    if (uniqueDates.includes(day.toDateString())) {
-      streak++;
-    } else {
-      break;
+  function calculateStreakAndAchievements(readings) {
+    if (readings.length === 0) { document.getElementById('streak-count').textContent = '0'; return; }
+    const dates = readings.map(r => { const d = r.timestamp?.toDate ? r.timestamp.toDate() : new Date(r.timestamp); return d.toDateString(); });
+    const uniqueDates = [...new Set(dates)];
+    let streak = 0;
+    const today = new Date();
+    for (let i = 0; i < 365; i++) {
+      const day = new Date(today); day.setDate(today.getDate() - i);
+      if (uniqueDates.includes(day.toDateString())) streak++; else break;
     }
+    document.getElementById('streak-count').textContent = streak;
+    const total = readings.length;
+    const ACHIEVEMENTS = [
+      { icon: '🌱', name: 'Primera lectura', desc: 'Registraste tu primera glucosa', earned: total >= 1 },
+      { icon: '⭐', name: 'Primera semana', desc: '7 días registrando', earned: streak >= 7 },
+      { icon: '🥇', name: 'Un mes', desc: '30 días consecutivos', earned: streak >= 30 },
+      { icon: '📊', name: '10 lecturas', desc: 'Registraste 10 lecturas', earned: total >= 10 },
+      { icon: '💪', name: '50 lecturas', desc: 'Registraste 50 lecturas', earned: total >= 50 },
+      { icon: '🏆', name: '100 lecturas', desc: 'Registraste 100 lecturas', earned: total >= 100 },
+      { icon: '🎯', name: 'Consistente', desc: '3 días seguidos', earned: streak >= 3 },
+      { icon: '👑', name: 'Campeón', desc: '60 días consecutivos', earned: streak >= 60 },
+    ];
+    document.getElementById('achievements').innerHTML = ACHIEVEMENTS.map(a => `
+      <div style="background:${a.earned ? 'var(--accent-light)' : 'var(--bg)'};border:1px solid ${a.earned ? '#b8dfc6' : 'var(--border)'};border-radius:12px;padding:12px;text-align:center;opacity:${a.earned ? '1' : '0.4'}">
+        <div style="font-size:28px;margin-bottom:6px">${a.icon}</div>
+        <div style="font-size:12px;font-weight:500;color:${a.earned ? 'var(--accent)' : 'var(--text)'}">${a.name}</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:2px">${a.desc}</div>
+      </div>`).join('');
   }
 
-  document.getElementById('streak-count').textContent = streak;
-
-  // Logros
-  const total = readings.length;
-  const ACHIEVEMENTS = [
-    { id: 'first', icon: '🌱', name: 'Primera lectura', desc: 'Registraste tu primera glucosa', earned: total >= 1 },
-    { id: 'week', icon: '⭐', name: 'Primera semana', desc: '7 días registrando', earned: streak >= 7 },
-    { id: 'month', icon: '🥇', name: 'Un mes', desc: '30 días consecutivos', earned: streak >= 30 },
-    { id: 'readings10', icon: '📊', name: '10 lecturas', desc: 'Registraste 10 lecturas', earned: total >= 10 },
-    { id: 'readings50', icon: '💪', name: '50 lecturas', desc: 'Registraste 50 lecturas', earned: total >= 50 },
-    { id: 'readings100', icon: '🏆', name: '100 lecturas', desc: 'Registraste 100 lecturas', earned: total >= 100 },
-    { id: 'consistent', icon: '🎯', name: 'Consistente', desc: '3 días seguidos', earned: streak >= 3 },
-    { id: 'champion', icon: '👑', name: 'Campeón', desc: '60 días consecutivos', earned: streak >= 60 },
-  ];
-
-  const container = document.getElementById('achievements');
-  container.innerHTML = ACHIEVEMENTS.map(a => `
-    <div style="
-      background:${a.earned ? 'var(--accent-light)' : 'var(--bg)'};
-      border:1px solid ${a.earned ? '#b8dfc6' : 'var(--border)'};
-      border-radius:12px;padding:12px;text-align:center;
-      opacity:${a.earned ? '1' : '0.4'};
-      transition: all 0.3s;
-    ">
-      <div style="font-size:28px;margin-bottom:6px">${a.icon}</div>
-      <div style="font-size:12px;font-weight:500;color:${a.earned ? 'var(--accent)' : 'var(--text)'}">${a.name}</div>
-      <div style="font-size:11px;color:var(--muted);margin-top:2px">${a.desc}</div>
-    </div>
-  `).join('');
-}
-
-  
-function calculateStats(readings) {
-  if (readings.length === 0) return;
-
-  const now = new Date();
-  const day7 = new Date(now - 7 * 24 * 60 * 60 * 1000);
-  const day30 = new Date(now - 30 * 24 * 60 * 60 * 1000);
-
-  const readings7 = readings.filter(r => {
-    const d = r.timestamp?.toDate ? r.timestamp.toDate() : new Date(r.timestamp);
-    return d >= day7;
-  });
-
-  const readings30 = readings.filter(r => {
-    const d = r.timestamp?.toDate ? r.timestamp.toDate() : new Date(r.timestamp);
-    return d >= day30;
-  });
-
-  // Promedios
-  const avg7 = readings7.length > 0
-    ? Math.round(readings7.reduce((a, r) => a + r.value, 0) / readings7.length)
-    : null;
-
-  const avg30 = readings30.length > 0
-    ? Math.round(readings30.reduce((a, r) => a + r.value, 0) / readings30.length)
-    : null;
-
-  // Tiempo en rango (70-140)
-  const inRange = readings30.filter(r => r.value >= 70 && r.value <= 140).length;
-  const inRangePct = readings30.length > 0
-    ? Math.round((inRange / readings30.length) * 100)
-    : null;
-
-  // Tendencia
-  let trend = '→';
-  let trendColor = 'var(--muted)';
-  if (readings7.length >= 4) {
-    const half = Math.floor(readings7.length / 2);
-    const firstHalf = readings7.slice(half);
-    const secondHalf = readings7.slice(0, half);
-    const avgFirst = firstHalf.reduce((a, r) => a + r.value, 0) / firstHalf.length;
-    const avgSecond = secondHalf.reduce((a, r) => a + r.value, 0) / secondHalf.length;
-    const diff = avgSecond - avgFirst;
-    if (diff < -5) { trend = '↓ Bajando'; trendColor = '#1a6b3c'; }
-    else if (diff > 5) { trend = '↑ Subiendo'; trendColor = '#c84b1f'; }
-    else { trend = '→ Estable'; trendColor = '#d97706'; }
+  function calculateStats(readings) {
+    if (readings.length === 0) return;
+    const now = new Date();
+    const day7 = new Date(now - 7*24*60*60*1000), day30 = new Date(now - 30*24*60*60*1000);
+    const r7 = readings.filter(r => { const d = r.timestamp?.toDate ? r.timestamp.toDate() : new Date(r.timestamp); return d >= day7; });
+    const r30 = readings.filter(r => { const d = r.timestamp?.toDate ? r.timestamp.toDate() : new Date(r.timestamp); return d >= day30; });
+    const avg7 = r7.length > 0 ? Math.round(r7.reduce((a, r) => a + r.value, 0) / r7.length) : null;
+    const avg30 = r30.length > 0 ? Math.round(r30.reduce((a, r) => a + r.value, 0) / r30.length) : null;
+    const inRange = r30.filter(r => r.value >= 70 && r.value <= 140).length;
+    const inRangePct = r30.length > 0 ? Math.round((inRange / r30.length) * 100) : null;
+    let trend = '→ Estable', trendColor = '#d97706';
+    if (r7.length >= 4) {
+      const half = Math.floor(r7.length / 2);
+      const avgFirst = r7.slice(half).reduce((a, r) => a + r.value, 0) / r7.slice(half).length;
+      const avgSecond = r7.slice(0, half).reduce((a, r) => a + r.value, 0) / r7.slice(0, half).length;
+      const diff = avgSecond - avgFirst;
+      if (diff < -5) { trend = '↓ Bajando'; trendColor = '#1a6b3c'; }
+      else if (diff > 5) { trend = '↑ Subiendo'; trendColor = '#c84b1f'; }
+    }
+    const total = r30.length;
+    const pctNormal = total > 0 ? Math.round((r30.filter(r => r.value >= 70 && r.value <= 140).length / total) * 100) : 0;
+    const pctHigh = total > 0 ? Math.round((r30.filter(r => r.value > 140).length / total) * 100) : 0;
+    const pctLow = total > 0 ? Math.round((r30.filter(r => r.value < 70).length / total) * 100) : 0;
+    document.getElementById('stat-avg7').textContent = avg7 ?? '—';
+    document.getElementById('stat-avg30').textContent = avg30 ?? '—';
+    document.getElementById('stat-inrange').textContent = inRangePct !== null ? inRangePct + '%' : '—';
+    document.getElementById('stat-trend').textContent = trend;
+    document.getElementById('stat-trend').style.fontSize = '16px';
+    document.getElementById('stat-trend').style.color = trendColor;
+    document.getElementById('bar-normal').style.width = pctNormal + '%';
+    document.getElementById('bar-high').style.width = pctHigh + '%';
+    document.getElementById('bar-low').style.width = pctLow + '%';
+    document.getElementById('pct-normal').textContent = pctNormal + '%';
+    document.getElementById('pct-high').textContent = pctHigh + '%';
+    document.getElementById('pct-low').textContent = pctLow + '%';
   }
 
-  // Distribución
-  const total = readings30.length;
-  const low = readings30.filter(r => r.value < 70).length;
-  const normal = readings30.filter(r => r.value >= 70 && r.value <= 140).length;
-  const high = readings30.filter(r => r.value > 140).length;
-
-  const pctLow = total > 0 ? Math.round((low / total) * 100) : 0;
-  const pctNormal = total > 0 ? Math.round((normal / total) * 100) : 0;
-  const pctHigh = total > 0 ? Math.round((high / total) * 100) : 0;
-
-  // Actualizar UI
-  document.getElementById('stat-avg7').textContent = avg7 ?? '—';
-  document.getElementById('stat-avg30').textContent = avg30 ?? '—';
-  document.getElementById('stat-inrange').textContent = inRangePct !== null ? inRangePct + '%' : '—';
-  document.getElementById('stat-trend').textContent = trend;
-  document.getElementById('stat-trend').style.fontSize = '16px';
-  document.getElementById('stat-trend').style.color = trendColor;
-
-  document.getElementById('bar-normal').style.width = pctNormal + '%';
-  document.getElementById('bar-high').style.width = pctHigh + '%';
-  document.getElementById('bar-low').style.width = pctLow + '%';
-  document.getElementById('pct-normal').textContent = pctNormal + '%';
-  document.getElementById('pct-high').textContent = pctHigh + '%';
-  document.getElementById('pct-low').textContent = pctLow + '%';
-}
- 
   function renderHistory(readings) {
     const container = document.getElementById('historyList');
-    if (readings.length === 0) {
-      container.innerHTML = '<p style="color:var(--muted);font-size:13px;text-align:center;padding:20px">Aún no tienes registros. ¡Registra tu primera lectura!</p>';
-      return;
-    }
+    if (readings.length === 0) { container.innerHTML = '<p style="color:var(--muted);font-size:13px;text-align:center;padding:20px">Aún no tienes registros.</p>'; return; }
     container.innerHTML = readings.slice(0, 10).map(r => {
       const status = getGlucoseStatus(r.value, r.moment);
       const date = r.timestamp?.toDate ? r.timestamp.toDate() : new Date(r.timestamp);
       const dateStr = date.toLocaleDateString('es-MX', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
-      return `
-        <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border);">
-          <div>
-            <div style="font-size:13px;color:var(--muted)">${dateStr} · ${r.moment || 'Sin especificar'}</div>
-            ${r.notes ? `<div style="font-size:12px;color:var(--muted);margin-top:2px">${r.notes}</div>` : ''}
-          </div>
-          <div style="display:flex;align-items:center;gap:8px">
-            <span style="font-family:'Fraunces',serif;font-size:20px;font-weight:700">${r.value}</span>
-            <span style="font-size:11px;padding:3px 8px;border-radius:20px;background:${status.bg};color:${status.color};font-weight:500">${status.label}</span>
-          </div>
-        </div>`;
+      return `<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border)">
+        <div><div style="font-size:13px;color:var(--muted)">${dateStr} · ${r.moment || 'Sin especificar'}</div>
+        ${r.notes ? `<div style="font-size:12px;color:var(--muted);margin-top:2px">${r.notes}</div>` : ''}</div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="font-family:'Fraunces',serif;font-size:20px;font-weight:700">${r.value}</span>
+          <span style="font-size:11px;padding:3px 8px;border-radius:20px;background:${status.bg};color:${status.color};font-weight:500">${status.label}</span>
+        </div></div>`;
     }).join('');
   }
 
@@ -590,534 +383,130 @@ function calculateStats(readings) {
     const canvas = document.getElementById('glucoseChart');
     if (!canvas) return;
     const reversed = [...readings].reverse().slice(-14);
-    const labels = reversed.map(r => {
-      const date = r.timestamp?.toDate ? r.timestamp.toDate() : new Date(r.timestamp);
-      return date.toLocaleDateString('es-MX', { day: 'numeric', month: 'short' });
-    });
+    const labels = reversed.map(r => { const d = r.timestamp?.toDate ? r.timestamp.toDate() : new Date(r.timestamp); return d.toLocaleDateString('es-MX', { day: 'numeric', month: 'short' }); });
     const values = reversed.map(r => r.value);
-    const colors = values.map(v => {
-      if (v < 70 || v > 180) return '#c84b1f';
-      if (v <= 125) return '#1a6b3c';
-      return '#d97706';
-    });
+    const colors = values.map(v => v < 70 || v > 180 ? '#c84b1f' : v <= 125 ? '#1a6b3c' : '#d97706');
     if (glucoseChart) glucoseChart.destroy();
     glucoseChart = new Chart(canvas, {
       type: 'line',
-      data: {
-        labels,
-        datasets: [{
-          label: 'Glucosa mg/dL',
-          data: values,
-          borderColor: '#1a6b3c',
-          backgroundColor: 'rgba(26,107,60,0.1)',
-          pointBackgroundColor: colors,
-          pointRadius: 5,
-          tension: 0.3,
-          fill: true
-        }]
-      },
-      options: {
-        responsive: true,
-        plugins: {
-          legend: { display: false },
-          tooltip: {
-            callbacks: {
-              label: ctx => `${ctx.raw} mg/dL`
-            }
-          }
-        },
-        scales: {
-          y: {
-            min: 50,
-            grid: { color: 'rgba(0,0,0,0.05)' },
-            ticks: { callback: v => v + ' mg/dL', font: { size: 11 } }
-          },
-          x: { ticks: { font: { size: 11 } } }
-        }
-      }
+      data: { labels, datasets: [{ label: 'Glucosa mg/dL', data: values, borderColor: '#1a6b3c', backgroundColor: 'rgba(26,107,60,0.1)', pointBackgroundColor: colors, pointRadius: 5, tension: 0.3, fill: true }] },
+      options: { responsive: true, plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => `${ctx.raw} mg/dL` } } }, scales: { y: { min: 50, grid: { color: 'rgba(0,0,0,0.05)' }, ticks: { callback: v => v + ' mg/dL', font: { size: 11 } } }, x: { ticks: { font: { size: 11 } } } } }
     });
   }
 </script>
 <style>
-  :root {
-    --bg: #f5f0e8;
-    --surface: #fffdf8;
-    --border: #e0d8c8;
-    --accent: #1a6b3c;
-    --accent-light: #e8f5ed;
-    --accent2: #c84b1f;
-    --text: #1c1a16;
-    --muted: #7a7060;
-  }
-
+  :root { --bg: #f5f0e8; --surface: #fffdf8; --border: #e0d8c8; --accent: #1a6b3c; --accent-light: #e8f5ed; --accent2: #c84b1f; --text: #1c1a16; --muted: #7a7060; }
   * { margin: 0; padding: 0; box-sizing: border-box; }
-
-  body {
-    background: var(--bg);
-    color: var(--text);
-    font-family: 'DM Sans', sans-serif;
-    min-height: 100vh;
-    display: flex;
-    flex-direction: column;
-  }
-
-  /* LOGIN SCREEN */
-  #loginScreen {
-    min-height: 100vh;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 40px 20px;
-    background: var(--bg);
-  }
-
-  .login-card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 24px;
-    padding: 40px;
-    max-width: 380px;
-    width: 100%;
-    text-align: center;
-    box-shadow: 0 20px 60px rgba(0,0,0,0.08);
-  }
-
-  .login-icon {
-    width: 64px; height: 64px;
-    background: var(--accent);
-    border-radius: 18px;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 32px;
-    margin: 0 auto 20px;
-  }
-
-  .login-title {
-    font-family: 'Fraunces', serif;
-    font-size: 28px;
-    font-weight: 700;
-    color: var(--accent);
-    margin-bottom: 8px;
-  }
-
-  .login-desc {
-    font-size: 14px;
-    color: var(--muted);
-    line-height: 1.6;
-    margin-bottom: 32px;
-    font-weight: 300;
-  }
-
-  .btn-google {
-    width: 100%;
-    background: white;
-    border: 1.5px solid var(--border);
-    border-radius: 12px;
-    padding: 14px;
-    font-size: 15px;
-    font-weight: 500;
-    cursor: pointer;
-    font-family: 'DM Sans', sans-serif;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 10px;
-    transition: all 0.2s;
-    color: var(--text);
-  }
-
-  .btn-google:hover { border-color: var(--accent); color: var(--accent); transform: translateY(-1px); }
-
-  .login-note {
-    font-size: 11px;
-    color: var(--muted);
-    margin-top: 16px;
-    line-height: 1.5;
-  }
-
-  /* MAIN APP */
-  #mainApp {
-    display: none;
-    flex-direction: column;
-    min-height: 100vh;
-  }
-
-  header {
-    background: var(--surface);
-    border-bottom: 1px solid var(--border);
-    padding: 0 20px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    height: 60px;
-    position: sticky;
-    top: 0;
-    z-index: 10;
-    flex-shrink: 0;
-  }
-
+  body { background: var(--bg); color: var(--text); font-family: 'DM Sans', sans-serif; min-height: 100vh; display: flex; flex-direction: column; }
+  #loginScreen { min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px 20px; }
+  .login-card { background: var(--surface); border: 1px solid var(--border); border-radius: 24px; padding: 40px; max-width: 380px; width: 100%; text-align: center; box-shadow: 0 20px 60px rgba(0,0,0,0.08); }
+  .login-icon { width: 64px; height: 64px; background: var(--accent); border-radius: 18px; display: flex; align-items: center; justify-content: center; font-size: 32px; margin: 0 auto 20px; }
+  .login-title { font-family: 'Fraunces', serif; font-size: 28px; font-weight: 700; color: var(--accent); margin-bottom: 8px; }
+  .login-desc { font-size: 14px; color: var(--muted); line-height: 1.6; margin-bottom: 32px; font-weight: 300; }
+  .btn-google { width: 100%; background: white; border: 1.5px solid var(--border); border-radius: 12px; padding: 14px; font-size: 15px; font-weight: 500; cursor: pointer; font-family: 'DM Sans', sans-serif; display: flex; align-items: center; justify-content: center; gap: 10px; transition: all 0.2s; color: var(--text); }
+  .btn-google:hover { border-color: var(--accent); color: var(--accent); }
+  .login-note { font-size: 11px; color: var(--muted); margin-top: 16px; line-height: 1.5; }
+  #mainApp { display: none; flex-direction: column; min-height: 100vh; }
+  header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 20px; display: flex; align-items: center; justify-content: space-between; height: 60px; position: sticky; top: 0; z-index: 10; flex-shrink: 0; }
   .logo { display: flex; align-items: center; gap: 10px; }
-
-  .logo-icon {
-    width: 34px; height: 34px;
-    background: var(--accent);
-    border-radius: 10px;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 18px;
-  }
-
+  .logo-icon { width: 34px; height: 34px; background: var(--accent); border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 18px; }
   .logo-text { font-family: 'Fraunces', serif; font-size: 20px; font-weight: 700; color: var(--accent); }
   .logo-sub { font-size: 11px; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; }
-
   .header-right { display: flex; align-items: center; gap: 10px; }
-
-  .user-info {
-    display: flex; align-items: center; gap: 8px;
-    background: var(--accent-light);
-    border: 1px solid #b8dfc6;
-    border-radius: 20px;
-    padding: 4px 12px 4px 6px;
-    cursor: pointer;
-  }
-
-  .user-av {
-    width: 26px; height: 26px;
-    background: var(--accent);
-    color: white;
-    border-radius: 50%;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 12px; font-weight: 600;
-  }
-
+  .user-info { display: flex; align-items: center; gap: 8px; background: var(--accent-light); border: 1px solid #b8dfc6; border-radius: 20px; padding: 4px 12px 4px 6px; cursor: pointer; }
+  .user-av { width: 26px; height: 26px; background: var(--accent); color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; }
   .user-name { font-size: 13px; color: var(--accent); font-weight: 500; }
-
-  /* TABS */
-  .tabs {
-    display: flex;
-    background: var(--surface);
-    border-bottom: 1px solid var(--border);
-    padding: 0 20px;
-    flex-shrink: 0;
-  }
-
-  .tab-btn {
-    background: none;
-    border: none;
-    border-bottom: 2px solid transparent;
-    padding: 12px 16px;
-    font-size: 13px;
-    font-weight: 500;
-    color: var(--muted);
-    cursor: pointer;
-    font-family: 'DM Sans', sans-serif;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    transition: all 0.2s;
-    white-space: nowrap;
-  }
-
+  .tabs { display: flex; background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 20px; flex-shrink: 0; }
+  .tab-btn { background: none; border: none; border-bottom: 2px solid transparent; padding: 12px 16px; font-size: 13px; font-weight: 500; color: var(--muted); cursor: pointer; font-family: 'DM Sans', sans-serif; display: flex; align-items: center; gap: 6px; transition: all 0.2s; white-space: nowrap; }
   .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
-  .tab-btn:hover { color: var(--text); }
-
-  /* TAB PANELS */
   .tab-panel { display: none; flex: 1; overflow-y: auto; }
   .tab-panel.active { display: flex; }
-
-  /* LAYOUT CHAT */
-  .layout {
-    display: flex;
-    flex: 1;
-    max-width: 1000px;
-    width: 100%;
-    margin: 0 auto;
-  }
-
-  .sidebar {
-    width: 220px;
-    flex-shrink: 0;
-    padding: 16px 12px;
-    border-right: 1px solid var(--border);
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-  }
-
-  .sidebar-label {
-    font-size: 10px; letter-spacing: 2px; text-transform: uppercase;
-    color: var(--muted); padding: 4px 8px; margin-top: 8px;
-  }
-
-  .topic-btn {
-    background: none; border: 1px solid transparent;
-    border-radius: 10px; padding: 9px 10px;
-    text-align: left; cursor: pointer;
-    font-family: 'DM Sans', sans-serif; font-size: 13px;
-    color: var(--text); display: flex; align-items: center; gap: 8px;
-    transition: all 0.2s;
-  }
-
-  .topic-btn:hover { background: var(--accent-light); border-color: #b8dfc6; color: var(--accent); }
-  .topic-btn.active { background: var(--accent-light); border-color: #b8dfc6; color: var(--accent); font-weight: 500; }
+  .layout { display: flex; flex: 1; max-width: 1000px; width: 100%; margin: 0 auto; }
+  .sidebar { width: 220px; flex-shrink: 0; padding: 16px 12px; border-right: 1px solid var(--border); display: flex; flex-direction: column; gap: 6px; }
+  .sidebar-label { font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); padding: 4px 8px; margin-top: 8px; }
+  .topic-btn { background: none; border: 1px solid transparent; border-radius: 10px; padding: 9px 10px; text-align: left; cursor: pointer; font-family: 'DM Sans', sans-serif; font-size: 13px; color: var(--text); display: flex; align-items: center; gap: 8px; transition: all 0.2s; }
+  .topic-btn:hover, .topic-btn.active { background: var(--accent-light); border-color: #b8dfc6; color: var(--accent); }
+  .topic-btn.active { font-weight: 500; }
   .topic-icon { font-size: 16px; width: 20px; text-align: center; flex-shrink: 0; }
-
-  .stats-card {
-    background: var(--accent); border-radius: 14px;
-    padding: 14px; color: white; margin-top: auto;
-  }
-
+  .stats-card { background: var(--accent); border-radius: 14px; padding: 14px; color: white; margin-top: auto; }
   .stats-card-title { font-size: 10px; opacity: 0.7; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 6px; }
   .glucose-display { font-family: 'Fraunces', serif; font-size: 32px; font-weight: 700; line-height: 1; }
   .glucose-unit { font-size: 11px; opacity: 0.7; }
   .glucose-status { margin-top: 6px; font-size: 11px; background: rgba(255,255,255,0.2); padding: 3px 8px; border-radius: 20px; display: inline-block; }
-
   .chat-area { flex: 1; display: flex; flex-direction: column; min-height: 0; }
-
   .topic-header { padding: 14px 20px 10px; border-bottom: 1px solid var(--border); background: var(--surface); flex-shrink: 0; }
   .topic-header h2 { font-family: 'Fraunces', serif; font-size: 17px; font-weight: 600; margin-bottom: 2px; }
   .topic-header p { font-size: 12px; color: var(--muted); }
-
-  .messages {
-    flex: 1; overflow-y: auto; padding: 20px;
-    display: flex; flex-direction: column; gap: 14px;
-    min-height: 300px; max-height: 400px;
-  }
-
+  .messages { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 14px; min-height: 300px; max-height: 400px; }
   .message { display: flex; gap: 8px; animation: msgIn 0.3s ease both; }
   .message.user { flex-direction: row-reverse; }
-
-  @keyframes msgIn {
-    from { opacity: 0; transform: translateY(8px); }
-    to { opacity: 1; transform: translateY(0); }
-  }
-
-  .avatar {
-    width: 30px; height: 30px; border-radius: 50%;
-    flex-shrink: 0; display: flex; align-items: center; justify-content: center;
-    font-size: 13px; font-weight: 600;
-  }
-
+  @keyframes msgIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+  .avatar { width: 30px; height: 30px; border-radius: 50%; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600; }
   .avatar.ai { background: var(--accent); color: white; font-family: 'Fraunces', serif; }
   .avatar.user { background: #e0d8c8; color: var(--muted); font-size: 14px; }
-
   .bubble { max-width: 75%; padding: 10px 14px; border-radius: 14px; font-size: 14px; line-height: 1.6; }
   .message.ai .bubble { background: white; border: 1px solid var(--border); border-radius: 4px 14px 14px 14px; }
   .message.user .bubble { background: var(--accent); color: white; border-radius: 14px 4px 14px 14px; }
-
   .typing { display: flex; align-items: center; gap: 4px; padding: 12px 14px; }
   .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); animation: bounce 1.2s infinite; }
   .dot:nth-child(2) { animation-delay: 0.2s; }
   .dot:nth-child(3) { animation-delay: 0.4s; }
   @keyframes bounce { 0%,60%,100%{transform:translateY(0)} 30%{transform:translateY(-6px)} }
-
   .quick-prompts { padding: 10px 20px; display: flex; gap: 6px; flex-wrap: wrap; border-top: 1px solid var(--border); background: var(--surface); flex-shrink: 0; }
-
-  .quick-btn {
-    background: var(--accent-light); border: 1px solid #b8dfc6;
-    border-radius: 20px; padding: 5px 12px; font-size: 12px;
-    color: var(--accent); cursor: pointer; font-family: 'DM Sans', sans-serif;
-    transition: all 0.2s;
-  }
-
+  .quick-btn { background: var(--accent-light); border: 1px solid #b8dfc6; border-radius: 20px; padding: 5px 12px; font-size: 12px; color: var(--accent); cursor: pointer; font-family: 'DM Sans', sans-serif; transition: all 0.2s; }
   .quick-btn:hover { background: var(--accent); color: white; border-color: var(--accent); }
-
   .input-area { padding: 12px 20px; border-top: 1px solid var(--border); background: var(--surface); display: flex; gap: 10px; align-items: flex-end; flex-shrink: 0; }
-
-  .input-wrap {
-    flex: 1; background: var(--bg); border: 1.5px solid var(--border);
-    border-radius: 12px; display: flex; align-items: center; padding: 8px 12px; gap: 8px;
-    transition: border-color 0.2s;
-  }
+  .input-wrap { flex: 1; background: var(--bg); border: 1.5px solid var(--border); border-radius: 12px; display: flex; align-items: center; padding: 8px 12px; gap: 8px; transition: border-color 0.2s; }
   .input-wrap:focus-within { border-color: var(--accent); }
-
-  textarea {
-    flex: 1; background: none; border: none; outline: none;
-    font-family: 'DM Sans', sans-serif; font-size: 14px; color: var(--text);
-    resize: none; max-height: 80px; line-height: 1.5;
-  }
+  textarea { flex: 1; background: none; border: none; outline: none; font-family: 'DM Sans', sans-serif; font-size: 14px; color: var(--text); resize: none; max-height: 80px; line-height: 1.5; }
   textarea::placeholder { color: var(--muted); }
-
-  .send-btn {
-    width: 38px; height: 38px; background: var(--accent); border: none;
-    border-radius: 10px; cursor: pointer; display: flex; align-items: center;
-    justify-content: center; font-size: 16px; transition: all 0.2s; flex-shrink: 0; color: white;
-  }
+  .send-btn { width: 38px; height: 38px; background: var(--accent); border: none; border-radius: 10px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 16px; transition: all 0.2s; flex-shrink: 0; color: white; }
   .send-btn:hover { background: #145530; }
   .send-btn:disabled { background: var(--border); cursor: not-allowed; }
-
-  /* GLUCOSE PANEL */
-  .glucose-panel {
-    flex: 1; padding: 20px; overflow-y: auto;
-    display: flex; flex-direction: column; gap: 16px;
-    max-width: 700px; margin: 0 auto; width: 100%;
-  }
-
-  .panel-card {
-    background: var(--surface); border: 1px solid var(--border);
-    border-radius: 16px; padding: 20px;
-  }
-
+  .glucose-panel { flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 16px; max-width: 700px; margin: 0 auto; width: 100%; }
+  .panel-card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 20px; }
   .panel-card h3 { font-family: 'Fraunces', serif; font-size: 16px; font-weight: 600; margin-bottom: 14px; }
-
   .form-row { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
-
   .form-group { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 120px; }
   .form-group label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; }
-
-  .form-input {
-    background: var(--bg); border: 1.5px solid var(--border);
-    border-radius: 10px; padding: 10px 12px; font-size: 15px;
-    font-family: 'DM Sans', sans-serif; color: var(--text); outline: none;
-    transition: border-color 0.2s;
-  }
+  .form-input { background: var(--bg); border: 1.5px solid var(--border); border-radius: 10px; padding: 10px 12px; font-size: 15px; font-family: 'DM Sans', sans-serif; color: var(--text); outline: none; transition: border-color 0.2s; }
   .form-input:focus { border-color: var(--accent); }
-
   select.form-input { cursor: pointer; }
-
-  .btn-save {
-    background: var(--accent); color: white; border: none;
-    border-radius: 10px; padding: 12px 24px; font-size: 14px;
-    font-weight: 500; cursor: pointer; font-family: 'DM Sans', sans-serif;
-    transition: all 0.2s; width: 100%;
-  }
+  .btn-save { background: var(--accent); color: white; border: none; border-radius: 10px; padding: 12px 24px; font-size: 14px; font-weight: 500; cursor: pointer; font-family: 'DM Sans', sans-serif; transition: all 0.2s; width: 100%; }
   .btn-save:hover { background: #145530; }
-
-  .save-success {
-    display: none; align-items: center; gap: 8px;
-    background: var(--accent-light); border: 1px solid #b8dfc6;
-    border-radius: 10px; padding: 10px 14px; font-size: 13px; color: var(--accent);
-  }
-
-  /* REFERENCE */
+  .save-success { display: none; align-items: center; gap: 8px; background: var(--accent-light); border: 1px solid #b8dfc6; border-radius: 10px; padding: 10px 14px; font-size: 13px; color: var(--accent); }
   .ref-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; }
-
-  .ref-item {
-    border-radius: 10px; padding: 10px 12px; text-align: center;
-  }
-
+  .ref-item { border-radius: 10px; padding: 10px 12px; text-align: center; }
   .ref-item .range { font-family: 'Fraunces', serif; font-size: 15px; font-weight: 600; }
   .ref-item .label { font-size: 11px; margin-top: 3px; }
-
-  /* REMINDERS */
-  .reminder-panel {
-    flex: 1; padding: 20px; overflow-y: auto;
-    display: flex; flex-direction: column; gap: 16px;
-    max-width: 700px; margin: 0 auto; width: 100%;
-  }
-
-  .reminder-card {
-    background: var(--surface); border: 1px solid var(--border);
-    border-radius: 16px; padding: 20px;
-  }
-
-  .reminder-card h3 { font-family: 'Fraunces', serif; font-size: 16px; font-weight: 600; margin-bottom: 6px; }
-  .reminder-card p { font-size: 13px; color: var(--muted); margin-bottom: 16px; line-height: 1.5; }
-
-  .reminder-item {
-    display: flex; align-items: center; justify-content: space-between;
-    padding: 12px 0; border-bottom: 1px solid var(--border);
-  }
-
-  .reminder-item:last-child { border-bottom: none; }
-
-  .reminder-left { display: flex; align-items: center; gap: 12px; }
-  .reminder-emoji { font-size: 22px; }
-  .reminder-name { font-size: 14px; font-weight: 500; }
-  .reminder-time { font-size: 12px; color: var(--muted); margin-top: 2px; }
-
-  .toggle {
-    width: 44px; height: 24px; background: var(--border);
-    border-radius: 12px; position: relative; cursor: pointer;
-    transition: background 0.2s; border: none; flex-shrink: 0;
-  }
-
-  .toggle.on { background: var(--accent); }
-  .toggle::after {
-    content: ''; position: absolute; top: 2px; left: 2px;
-    width: 20px; height: 20px; background: white; border-radius: 50%;
-    transition: transform 0.2s;
-  }
-  .toggle.on::after { transform: translateX(20px); } 
-  .time-input {
-  background: var(--bg);
-  border: 1.5px solid var(--border);
-  border-radius: 8px;
-  padding: 4px 8px;
-  font-size: 13px;
-  font-family: 'DM Sans', sans-serif;
-  color: var(--text);
-  outline: none;
-  margin-top: 4px;
-  cursor: pointer;
-}
-.time-input:focus { border-color: var(--accent); }
-
-  /* MOBILE NAV */
-  .mobile-nav {
-    display: none; position: fixed; bottom: 0; left: 0; right: 0;
-    background: var(--surface); border-top: 1px solid var(--border);
-    padding: 6px 4px; z-index: 100; justify-content: space-around;
-  }
-
-  .mobile-nav-btn {
-    background: none; border: none; border-radius: 10px;
-    padding: 5px 4px; cursor: pointer; display: flex;
-    flex-direction: column; align-items: center; gap: 2px; flex: 1;
-  }
-
+  .time-input { background: var(--bg); border: 1.5px solid var(--border); border-radius: 8px; padding: 4px 8px; font-size: 13px; font-family: 'DM Sans', sans-serif; color: var(--text); outline: none; margin-top: 4px; cursor: pointer; }
+  .time-input:focus { border-color: var(--accent); }
+  .mobile-nav { display: none; position: fixed; bottom: 0; left: 0; right: 0; background: var(--surface); border-top: 1px solid var(--border); padding: 6px 4px; z-index: 100; justify-content: space-around; }
+  .mobile-nav-btn { background: none; border: none; border-radius: 10px; padding: 5px 4px; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 2px; flex: 1; }
   .mobile-nav-btn.active { background: var(--accent-light); }
   .mobile-nav-btn span:first-child { font-size: 18px; }
   .mobile-nav-btn span:last-child { font-size: 9px; color: var(--muted); font-weight: 500; }
   .mobile-nav-btn.active span:last-child { color: var(--accent); }
-
-@media (max-width: 600px) {
-    .sidebar { display: none; }
-    .layout { max-width: 100%; }
-    .mobile-nav { display: flex; }
-    .tab-panel.active { padding-bottom: 70px; }
-    .glucose-panel { padding-bottom: 80px; }
-    .reminder-panel { padding-bottom: 80px; }
-    .tabs { display: none; }
-    .chat-area { padding-bottom: 0; }
-  }
-
-  .chat-topic-nav {
-    display: none;
-    position: fixed;
-    bottom: 56px;
-    left: 0; right: 0;
-    background: var(--surface);
-    border-top: 1px solid var(--border);
-    padding: 6px 4px;
-    z-index: 99;
-    justify-content: space-around;
-    overflow-x: auto;
-  }
-
-  @media (max-width: 600px) {
-    .chat-topic-nav { display: flex; }
-    #tab-chat { padding-bottom: 110px; }
-  }
-
-  .chat-topic-btn {
-    background: none; border: none;
-    border-radius: 8px; padding: 4px 6px;
-    cursor: pointer; display: flex;
-    flex-direction: column; align-items: center;
-    gap: 2px; flex-shrink: 0;
-    font-family: 'DM Sans', sans-serif;
-  }
-
+  .chat-topic-nav { display: none; position: fixed; bottom: 56px; left: 0; right: 0; background: var(--surface); border-top: 1px solid var(--border); padding: 6px 4px; z-index: 99; justify-content: space-around; overflow-x: auto; }
+  .chat-topic-btn { background: none; border: none; border-radius: 8px; padding: 4px 6px; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 2px; flex-shrink: 0; font-family: 'DM Sans', sans-serif; }
   .chat-topic-btn.active { background: var(--accent-light); }
   .chat-topic-btn span:first-child { font-size: 16px; }
   .chat-topic-btn span:last-child { font-size: 9px; color: var(--muted); white-space: nowrap; }
   .chat-topic-btn.active span:last-child { color: var(--accent); }
-
+  @media (max-width: 600px) {
+    .sidebar { display: none; }
+    .layout { max-width: 100%; }
+    .mobile-nav { display: flex; }
+    .chat-topic-nav { display: flex; }
+    .tab-panel.active { padding-bottom: 70px; }
+    .glucose-panel { padding-bottom: 80px; }
+    .tabs { display: none; }
+    #tab-chat { padding-bottom: 110px; }
+  }
 </style>
 </head>
 <body>
 
-<!-- LOGIN -->
 <div id="loginScreen">
   <div class="login-card">
     <div class="login-icon">🩺</div>
@@ -1127,20 +516,15 @@ function calculateStats(readings) {
       <svg width="18" height="18" viewBox="0 0 18 18"><path fill="#4285F4" d="M16.51 8H8.98v3h4.3c-.18 1-.74 1.48-1.6 2.04v2.01h2.6a7.8 7.8 0 002.38-5.88c0-.57-.05-.66-.15-1.18z"/><path fill="#34A853" d="M8.98 17c2.16 0 3.97-.72 5.3-1.94l-2.6-2a4.8 4.8 0 01-7.18-2.54H1.83v2.07A8 8 0 008.98 17z"/><path fill="#FBBC05" d="M4.5 10.52a4.8 4.8 0 010-3.04V5.41H1.83a8 8 0 000 7.18l2.67-2.07z"/><path fill="#EA4335" d="M8.98 4.18c1.17 0 2.23.4 3.06 1.2l2.3-2.3A8 8 0 001.83 5.4L4.5 7.49a4.77 4.77 0 014.48-3.3z"/></svg>
       Continuar con Google
     </button>
-    <p class="login-note">Al ingresar aceptas que tus datos se almacenan de forma segura. GlucoCoach no reemplaza la atención médica.</p>
+    <p class="login-note">Al ingresar aceptas nuestro aviso de privacidad. GlucoCoach no reemplaza la atención médica.</p>
   </div>
 </div>
 
-<!-- MAIN APP -->
 <div id="mainApp">
-
   <header>
     <div class="logo">
       <div class="logo-icon">🩺</div>
-      <div>
-        <div class="logo-text">GlucoCoach</div>
-        <div class="logo-sub">Tu coach de diabetes</div>
-      </div>
+      <div><div class="logo-text">GlucoCoach</div><div class="logo-sub">Tu coach de diabetes</div></div>
     </div>
     <div class="header-right">
       <div class="user-info" onclick="showProfile()">
@@ -1150,14 +534,12 @@ function calculateStats(readings) {
     </div>
   </header>
 
-  <!-- TABS desktop -->
   <div class="tabs">
     <button class="tab-btn active" onclick="switchTab('chat', this)">💬 Coach IA</button>
     <button class="tab-btn" onclick="switchTab('glucose', this)">📊 Mi Glucosa</button>
-   <button class="tab-btn" onclick="switchTab('food', this)">🥗 Alimentación</button>
+    <button class="tab-btn" onclick="switchTab('food', this)">🥗 Alimentación</button>
   </div>
 
-  <!-- TAB: CHAT -->
   <div class="tab-panel active" id="tab-chat">
     <div class="layout">
       <div class="sidebar">
@@ -1183,7 +565,7 @@ function calculateStats(readings) {
         <div class="messages" id="messages">
           <div class="message ai">
             <div class="avatar ai">G</div>
-            <div class="bubble">¡Hola! Soy GlucoCoach 🌿<br><br>Estoy aquí para ayudarte con <strong>alimentación, glucosa, ejercicio, medicamentos</strong> y más. También puedes registrar tu glucosa en la pestaña <strong>📊 Mi Glucosa</strong>.<br><br>¿En qué te puedo ayudar hoy?</div>
+            <div class="bubble">¡Hola! Soy GlucoCoach 🌿<br><br>Estoy aquí para ayudarte con <strong>alimentación, glucosa, ejercicio, medicamentos</strong> y más.<br><br>¿En qué te puedo ayudar hoy?</div>
           </div>
         </div>
         <div class="quick-prompts" id="quickPrompts">
@@ -1204,11 +586,8 @@ function calculateStats(readings) {
     </div>
   </div>
 
-  <!-- TAB: GLUCOSA -->
   <div class="tab-panel" id="tab-glucose">
     <div class="glucose-panel">
-
-      <!-- Registro -->
       <div class="panel-card">
         <h3>📝 Registrar lectura</h3>
         <div class="form-row">
@@ -1232,296 +611,189 @@ function calculateStats(readings) {
           <input type="text" id="glucoseNotes" class="form-input" placeholder="Ej: después de ejercicio">
         </div>
         <button class="btn-save" onclick="saveGlucose()">💾 Guardar lectura</button>
-        <div class="save-success" id="saveSuccess" style="margin-top:10px">
-          ✅ Lectura guardada correctamente
-        </div>
+        <div class="save-success" id="saveSuccess" style="margin-top:10px">✅ Lectura guardada correctamente</div>
       </div>
 
-      <!-- Gráfica -->
       <div class="panel-card">
         <h3>📈 Historial (últimas 14 lecturas)</h3>
         <canvas id="glucoseChart" style="max-height:200px"></canvas>
       </div>
 
-<!-- RACHAS Y LOGROS -->
-<div class="panel-card">
-  <h3>🏆 Rachas y logros</h3>
-  <div style="display:flex;align-items:center;gap:16px;background:var(--accent);border-radius:12px;padding:16px;margin-bottom:14px;color:white">
-    <div style="font-size:48px;line-height:1">🔥</div>
-    <div>
-      <div style="font-size:11px;opacity:0.7;text-transform:uppercase;letter-spacing:1px">Racha actual</div>
-      <div style="font-family:'Fraunces',serif;font-size:36px;font-weight:700;line-height:1" id="streak-count">0</div>
-      <div style="font-size:12px;opacity:0.8">días consecutivos registrando</div>
-    </div>
-  </div>
-  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px" id="achievements">
-  </div>
-</div>
+      <div class="panel-card">
+        <h3>🏆 Rachas y logros</h3>
+        <div style="display:flex;align-items:center;gap:16px;background:var(--accent);border-radius:12px;padding:16px;margin-bottom:14px;color:white">
+          <div style="font-size:48px;line-height:1">🔥</div>
+          <div>
+            <div style="font-size:11px;opacity:0.7;text-transform:uppercase;letter-spacing:1px">Racha actual</div>
+            <div style="font-family:'Fraunces',serif;font-size:36px;font-weight:700;line-height:1" id="streak-count">0</div>
+            <div style="font-size:12px;opacity:0.8">días consecutivos registrando</div>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px" id="achievements"></div>
+      </div>
 
-<!-- PDF REPORTE -->
-<div class="panel-card">
-  <h3>👨‍⚕️ Reporte para tu médico</h3>
-  <p style="font-size:13px;color:var(--muted);line-height:1.6;margin-bottom:16px">Genera un resumen de tus últimas 4 semanas listo para llevar a tu consulta médica.</p>
-  <button class="btn-save" onclick="generatePDF()" style="background:#1a6b3c">📄 Generar reporte PDF</button>
-</div>
-      
-<!-- ESTADÍSTICAS -->
-<div class="panel-card" id="statsCard">
-  <h3>📊 Mis estadísticas</h3>
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
-    <div style="background:var(--bg);border-radius:10px;padding:12px;text-align:center">
-      <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">Promedio 7 días</div>
-      <div style="font-family:'Fraunces',serif;font-size:28px;font-weight:700" id="stat-avg7">—</div>
-      <div style="font-size:11px;color:var(--muted)">mg/dL</div>
-    </div>
-    <div style="background:var(--bg);border-radius:10px;padding:12px;text-align:center">
-      <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">Promedio 30 días</div>
-      <div style="font-family:'Fraunces',serif;font-size:28px;font-weight:700" id="stat-avg30">—</div>
-      <div style="font-size:11px;color:var(--muted)">mg/dL</div>
-    </div>
-    <div style="background:var(--bg);border-radius:10px;padding:12px;text-align:center">
-      <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">Tiempo en rango</div>
-      <div style="font-family:'Fraunces',serif;font-size:28px;font-weight:700;color:var(--accent)" id="stat-inrange">—</div>
-      <div style="font-size:11px;color:var(--muted)">% normal</div>
-    </div>
-    <div style="background:var(--bg);border-radius:10px;padding:12px;text-align:center">
-      <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">Tendencia</div>
-      <div style="font-family:'Fraunces',serif;font-size:28px;font-weight:700" id="stat-trend">—</div>
-      <div style="font-size:11px;color:var(--muted)" id="stat-trend-label">últimos 7 días</div>
-    </div>
-  </div>
-  <div style="background:var(--bg);border-radius:10px;padding:12px">
-    <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Distribución de lecturas</div>
-    <div style="display:flex;flex-direction:column;gap:6px">
-      <div style="display:flex;align-items:center;gap:8px;font-size:13px">
-        <span style="width:80px;color:var(--muted)">Normal</span>
-        <div style="flex:1;background:var(--border);border-radius:10px;height:8px;overflow:hidden">
-          <div id="bar-normal" style="height:100%;background:#1a6b3c;border-radius:10px;transition:width 0.8s ease;width:0%"></div>
-        </div>
-        <span id="pct-normal" style="width:36px;text-align:right;font-weight:500">0%</span>
+      <div class="panel-card">
+        <h3>👨‍⚕️ Reporte para tu médico</h3>
+        <p style="font-size:13px;color:var(--muted);line-height:1.6;margin-bottom:16px">Genera un resumen de tus lecturas listo para llevar a tu consulta médica.</p>
+        <button class="btn-save" onclick="generatePDF()">📄 Generar reporte PDF</button>
       </div>
-      <div style="display:flex;align-items:center;gap:8px;font-size:13px">
-        <span style="width:80px;color:var(--muted)">Elevada</span>
-        <div style="flex:1;background:var(--border);border-radius:10px;height:8px;overflow:hidden">
-          <div id="bar-high" style="height:100%;background:#d97706;border-radius:10px;transition:width 0.8s ease;width:0%"></div>
-        </div>
-        <span id="pct-high" style="width:36px;text-align:right;font-weight:500">0%</span>
-      </div>
-      <div style="display:flex;align-items:center;gap:8px;font-size:13px">
-        <span style="width:80px;color:var(--muted)">Baja</span>
-        <div style="flex:1;background:var(--border);border-radius:10px;height:8px;overflow:hidden">
-          <div id="bar-low" style="height:100%;background:#c84b1f;border-radius:10px;transition:width 0.8s ease;width:0%"></div>
-        </div>
-        <span id="pct-low" style="width:36px;text-align:right;font-weight:500">0%</span>
-      </div>
-    </div>
-  </div>
-</div>
 
-     
-      <!-- Historial -->
+      <div class="panel-card" id="statsCard">
+        <h3>📊 Mis estadísticas</h3>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
+          <div style="background:var(--bg);border-radius:10px;padding:12px;text-align:center">
+            <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">Promedio 7 días</div>
+            <div style="font-family:'Fraunces',serif;font-size:28px;font-weight:700" id="stat-avg7">—</div>
+            <div style="font-size:11px;color:var(--muted)">mg/dL</div>
+          </div>
+          <div style="background:var(--bg);border-radius:10px;padding:12px;text-align:center">
+            <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">Promedio 30 días</div>
+            <div style="font-family:'Fraunces',serif;font-size:28px;font-weight:700" id="stat-avg30">—</div>
+            <div style="font-size:11px;color:var(--muted)">mg/dL</div>
+          </div>
+          <div style="background:var(--bg);border-radius:10px;padding:12px;text-align:center">
+            <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">Tiempo en rango</div>
+            <div style="font-family:'Fraunces',serif;font-size:28px;font-weight:700;color:var(--accent)" id="stat-inrange">—</div>
+            <div style="font-size:11px;color:var(--muted)">% normal</div>
+          </div>
+          <div style="background:var(--bg);border-radius:10px;padding:12px;text-align:center">
+            <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">Tendencia</div>
+            <div style="font-family:'Fraunces',serif;font-size:28px;font-weight:700" id="stat-trend">—</div>
+            <div style="font-size:11px;color:var(--muted)">últimos 7 días</div>
+          </div>
+        </div>
+        <div style="background:var(--bg);border-radius:10px;padding:12px">
+          <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Distribución de lecturas</div>
+          <div style="display:flex;flex-direction:column;gap:6px">
+            <div style="display:flex;align-items:center;gap:8px;font-size:13px">
+              <span style="width:80px;color:var(--muted)">Normal</span>
+              <div style="flex:1;background:var(--border);border-radius:10px;height:8px;overflow:hidden"><div id="bar-normal" style="height:100%;background:#1a6b3c;border-radius:10px;transition:width 0.8s ease;width:0%"></div></div>
+              <span id="pct-normal" style="width:36px;text-align:right;font-weight:500">0%</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;font-size:13px">
+              <span style="width:80px;color:var(--muted)">Elevada</span>
+              <div style="flex:1;background:var(--border);border-radius:10px;height:8px;overflow:hidden"><div id="bar-high" style="height:100%;background:#d97706;border-radius:10px;transition:width 0.8s ease;width:0%"></div></div>
+              <span id="pct-high" style="width:36px;text-align:right;font-weight:500">0%</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;font-size:13px">
+              <span style="width:80px;color:var(--muted)">Baja</span>
+              <div style="flex:1;background:var(--border);border-radius:10px;height:8px;overflow:hidden"><div id="bar-low" style="height:100%;background:#c84b1f;border-radius:10px;transition:width 0.8s ease;width:0%"></div></div>
+              <span id="pct-low" style="width:36px;text-align:right;font-weight:500">0%</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div class="panel-card">
         <h3>🕒 Lecturas recientes</h3>
-        <div id="historyList">
-          <p style="color:var(--muted);font-size:13px;text-align:center;padding:20px">Cargando historial...</p>
-        </div>
+        <div id="historyList"><p style="color:var(--muted);font-size:13px;text-align:center;padding:20px">Cargando historial...</p></div>
       </div>
 
-      <!-- Referencia -->
       <div class="panel-card">
         <h3>📋 Rangos de referencia</h3>
         <div class="ref-grid">
-          <div class="ref-item" style="background:#fee2e2">
-            <div class="range" style="color:#991b1b">&lt; 70</div>
-            <div class="label" style="color:#991b1b">Hipoglucemia</div>
-          </div>
-          <div class="ref-item" style="background:#e8f5ed">
-            <div class="range" style="color:#1a6b3c">70–99</div>
-            <div class="label" style="color:#1a6b3c">Normal (ayunas)</div>
-          </div>
-          <div class="ref-item" style="background:#fef3c7">
-            <div class="range" style="color:#d97706">100–125</div>
-            <div class="label" style="color:#d97706">Prediabetes</div>
-          </div>
-          <div class="ref-item" style="background:#fde8e0">
-            <div class="range" style="color:#c84b1f">≥ 126</div>
-            <div class="label" style="color:#c84b1f">Diabetes</div>
-          </div>
+          <div class="ref-item" style="background:#fee2e2"><div class="range" style="color:#991b1b">&lt; 70</div><div class="label" style="color:#991b1b">Hipoglucemia</div></div>
+          <div class="ref-item" style="background:#e8f5ed"><div class="range" style="color:#1a6b3c">70–99</div><div class="label" style="color:#1a6b3c">Normal (ayunas)</div></div>
+          <div class="ref-item" style="background:#fef3c7"><div class="range" style="color:#d97706">100–125</div><div class="label" style="color:#d97706">Prediabetes</div></div>
+          <div class="ref-item" style="background:#fde8e0"><div class="range" style="color:#c84b1f">≥ 126</div><div class="label" style="color:#c84b1f">Diabetes</div></div>
         </div>
       </div>
-
     </div>
   </div>
 
-<!-- TAB: ALIMENTACIÓN -->
-<div class="tab-panel" id="tab-food">
-  <div class="glucose-panel">
-
-    <!-- Registrar comida -->
-    <div class="panel-card">
-      <h3>🍽️ Registrar comida</h3>
-      <div class="form-group" style="margin-bottom:10px">
-        <label>¿Qué comiste?</label>
-        <input type="text" id="foodInput" class="form-input" placeholder="Ej: arroz con pollo y ensalada">
-      </div>
-      <div class="form-row">
-        <div class="form-group">
-          <label>Momento</label>
-          <select id="foodMoment" class="form-input">
-            <option value="Desayuno">Desayuno</option>
-            <option value="Almuerzo">Almuerzo</option>
-            <option value="Comida">Comida</option>
-            <option value="Merienda">Merienda</option>
-            <option value="Cena">Cena</option>
-          </select>
+  <div class="tab-panel" id="tab-food">
+    <div class="glucose-panel">
+      <div class="panel-card">
+        <h3>🍽️ Registrar comida</h3>
+        <div class="form-group" style="margin-bottom:10px">
+          <label>¿Qué comiste?</label>
+          <input type="text" id="foodInput" class="form-input" placeholder="Ej: arroz con pollo y ensalada">
         </div>
-        <div class="form-group">
-          <label>Porción</label>
-          <select id="foodPortion" class="form-input">
-            <option value="Pequeña">Pequeña</option>
-            <option value="Normal">Normal</option>
-            <option value="Grande">Grande</option>
-          </select>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Momento</label>
+            <select id="foodMoment" class="form-input">
+              <option value="Desayuno">Desayuno</option>
+              <option value="Almuerzo">Almuerzo</option>
+              <option value="Comida">Comida</option>
+              <option value="Merienda">Merienda</option>
+              <option value="Cena">Cena</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Porción</label>
+            <select id="foodPortion" class="form-input">
+              <option value="Pequeña">Pequeña</option>
+              <option value="Normal">Normal</option>
+              <option value="Grande">Grande</option>
+            </select>
+          </div>
+        </div>
+        <button class="btn-save" onclick="analyzeFood()">🤖 Analizar con IA</button>
+        <div id="foodAnalysis" style="display:none;margin-top:14px;background:var(--accent-light);border:1px solid #b8dfc6;border-radius:12px;padding:14px">
+          <div style="font-size:12px;color:var(--accent);font-weight:500;margin-bottom:6px">Análisis de GlucoCoach</div>
+          <div id="foodAnalysisText" style="font-size:13px;line-height:1.6;color:var(--text)"></div>
+          <button class="btn-save" onclick="saveFood()" style="margin-top:12px">💾 Guardar comida</button>
         </div>
       </div>
-      <button class="btn-save" onclick="analyzeFood()">🤖 Analizar con IA</button>
-
-      <!-- Resultado IA -->
-      <div id="foodAnalysis" style="display:none;margin-top:14px;background:var(--accent-light);border:1px solid #b8dfc6;border-radius:12px;padding:14px">
-        <div style="font-size:12px;color:var(--accent);font-weight:500;margin-bottom:6px">Análisis de GlucoCoach</div>
-        <div id="foodAnalysisText" style="font-size:13px;line-height:1.6;color:var(--text)"></div>
-        <button class="btn-save" onclick="saveFood()" style="margin-top:12px;background:var(--accent)">💾 Guardar comida</button>
-      </div>
-    </div>
-
-    <!-- Historial de comidas -->
-    <div class="panel-card">
-      <h3>📋 Historial de comidas</h3>
-      <div id="foodHistory">
-        <p style="color:var(--muted);font-size:13px;text-align:center;padding:20px">Cargando historial...</p>
-      </div>
-    </div>
-
-  </div>
-</div>
-
-  
-  <!-- TAB: RECORDATORIOS -->
-  <div class="tab-panel" id="tab-reminders">
-    <div class="reminder-panel">
-      <div class="reminder-card">
-        <h3>🔔 Recordatorios activos</h3>
-        <p>Activa los recordatorios que necesites. El navegador te enviará notificaciones en los horarios configurados.</p>
-
-<div class="reminder-item">
-  <div class="reminder-left">
-    <div class="reminder-emoji">💊</div>
-    <div>
-      <div class="reminder-name">Medicamento matutino</div>
-      <input type="time" class="time-input" id="time-med1" value="08:00">
-    </div>
-  </div>
-  <button class="toggle" id="toggle-med1" onclick="toggleReminderCustom(this, 'med1', 'time-med1', 'Hora de tu medicamento matutino 💊')"></button>
-</div>
-
-<div class="reminder-item">
-  <div class="reminder-left">
-    <div class="reminder-emoji">📊</div>
-    <div>
-      <div class="reminder-name">Medir glucosa en ayunas</div>
-      <input type="time" class="time-input" id="time-glu1" value="07:00">
-    </div>
-  </div>
-  <button class="toggle" id="toggle-glu1" onclick="toggleReminderCustom(this, 'glu1', 'time-glu1', 'Mide tu glucosa en ayunas 📊')"></button>
-</div>
-
-<div class="reminder-item">
-  <div class="reminder-left">
-    <div class="reminder-emoji">🍽️</div>
-    <div>
-      <div class="reminder-name">Medir glucosa post-comida</div>
-      <input type="time" class="time-input" id="time-glu2" value="14:00">
-    </div>
-  </div>
-  <button class="toggle" id="toggle-glu2" onclick="toggleReminderCustom(this, 'glu2', 'time-glu2', 'Mide tu glucosa 2 horas después de comer 🍽️')"></button>
-</div>
-
-<div class="reminder-item">
-  <div class="reminder-left">
-    <div class="reminder-emoji">💊</div>
-    <div>
-      <div class="reminder-name">Medicamento nocturno</div>
-      <input type="time" class="time-input" id="time-med2" value="21:00">
-    </div>
-  </div>
-  <button class="toggle" id="toggle-med2" onclick="toggleReminderCustom(this, 'med2', 'time-med2', 'Hora de tu medicamento nocturno 💊')"></button>
-</div>
-
-<div class="reminder-item">
-  <div class="reminder-left">
-    <div class="reminder-emoji">🏃</div>
-    <div>
-      <div class="reminder-name">Hora de ejercicio</div>
-      <input type="time" class="time-input" id="time-eje1" value="18:00">
-    </div>
-  </div>
-  <button class="toggle" id="toggle-eje1" onclick="toggleReminderCustom(this, 'eje1', 'time-eje1', '¡Es hora de moverte! 🏃 Tu rutina de ejercicio te espera.')"></button>
-</div>
-              
-      </div>
-
-      <div class="reminder-card">
-        <h3>ℹ️ Cómo funcionan</h3>
-        <p>Al activar un recordatorio el navegador te pedirá permiso para enviar notificaciones. Acepta para recibirlas aunque la app esté cerrada.</p>
-        <p style="margin-top:8px">En iPhone las notificaciones funcionan si instalaste la app en tu pantalla de inicio desde Safari.</p>
+      <div class="panel-card">
+        <h3>📋 Historial de comidas</h3>
+        <div id="foodHistory"><p style="color:var(--muted);font-size:13px;text-align:center;padding:20px">Cargando historial...</p></div>
       </div>
     </div>
   </div>
 
   <!-- Chat Topic Nav Mobile -->
-<div class="chat-topic-nav" id="chatTopicNav">
-  <button class="chat-topic-btn active" onclick="setTopicMobile(this, 'alimentacion')"><span>🥗</span><span>Alimentación</span></button>
-  <button class="chat-topic-btn" onclick="setTopicMobile(this, 'glucosa')"><span>📊</span><span>Glucosa</span></button>
-  <button class="chat-topic-btn" onclick="setTopicMobile(this, 'ejercicio')"><span>🏃</span><span>Ejercicio</span></button>
-  <button class="chat-topic-btn" onclick="setTopicMobile(this, 'medicamentos')"><span>💊</span><span>Medicamentos</span></button>
-  <button class="chat-topic-btn" onclick="setTopicMobile(this, 'emocional')"><span>🧘</span><span>Bienestar</span></button>
-  <button class="chat-topic-btn" onclick="setTopicMobile(this, 'recetas')"><span>👨‍🍳</span><span>Recetas</span></button>
-</div>
+  <div class="chat-topic-nav" id="chatTopicNav">
+    <button class="chat-topic-btn active" onclick="setTopicMobile(this, 'alimentacion')"><span>🥗</span><span>Alimentación</span></button>
+    <button class="chat-topic-btn" onclick="setTopicMobile(this, 'glucosa')"><span>📊</span><span>Glucosa</span></button>
+    <button class="chat-topic-btn" onclick="setTopicMobile(this, 'ejercicio')"><span>🏃</span><span>Ejercicio</span></button>
+    <button class="chat-topic-btn" onclick="setTopicMobile(this, 'medicamentos')"><span>💊</span><span>Medicamentos</span></button>
+    <button class="chat-topic-btn" onclick="setTopicMobile(this, 'emocional')"><span>🧘</span><span>Bienestar</span></button>
+    <button class="chat-topic-btn" onclick="setTopicMobile(this, 'recetas')"><span>👨‍🍳</span><span>Recetas</span></button>
+  </div>
 
-<!-- Modal Perfil -->
-<div id="profileModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:200;align-items:center;justify-content:center;padding:20px">
-  <div style="background:var(--surface);border-radius:20px;padding:28px;max-width:360px;width:100%">
-    <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
-      <div style="width:48px;height:48px;background:var(--accent);border-radius:50%;display:flex;align-items:center;justify-content:center;color:white;font-size:20px;font-weight:600" id="modalAvatar">G</div>
-      <div>
-        <div style="font-weight:500;font-size:15px" id="modalName">Usuario</div>
-        <div style="font-size:12px;color:var(--muted)" id="modalEmail"></div>
+  <!-- Modal Aviso de Privacidad -->
+  <div id="privacyModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:300;align-items:center;justify-content:center;padding:20px">
+    <div style="background:var(--surface);border-radius:20px;padding:28px;max-width:420px;width:100%;max-height:80vh;overflow-y:auto">
+      <h2 style="font-family:'Fraunces',serif;font-size:20px;font-weight:700;margin-bottom:6px">🔒 Aviso de Privacidad</h2>
+      <p style="font-size:12px;color:var(--muted);margin-bottom:16px">Última actualización: Junio 2025</p>
+      <div style="font-size:13px;line-height:1.7;color:var(--text);display:flex;flex-direction:column;gap:12px">
+        <div><strong>¿Quién recopila tus datos?</strong><br>GlucoCoach recopila y trata tus datos personales de salud con fines exclusivos de prestación del servicio.</div>
+        <div><strong>¿Qué datos recopilamos?</strong><br>• Nombre y correo electrónico (mediante Google)<br>• Lecturas de glucosa que registres<br>• Registro de alimentos que ingreses</div>
+        <div><strong>¿Para qué usamos tus datos?</strong><br>Únicamente para brindarte el servicio. No vendemos ni compartimos tus datos con terceros.</div>
+        <div><strong>¿Dónde se almacenan?</strong><br>En Firebase (Google Cloud), con cifrado en tránsito y en reposo.</div>
+        <div><strong>Tus derechos (ARCO)</strong><br>Puedes Acceder, Rectificar, Cancelar y Oponerte al uso de tus datos desde tu perfil en la app.</div>
+        <div><strong>Eliminación de datos</strong><br>Puedes eliminar todos tus datos desde tu perfil → "Eliminar todos mis datos".</div>
+        <div style="background:var(--accent-light);border-radius:10px;padding:12px;font-size:12px;color:var(--accent)">⚕️ GlucoCoach es un servicio informativo de apoyo. No reemplaza la atención médica profesional.</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px;margin-top:20px">
+        <button onclick="acceptPrivacy()" style="background:var(--accent);color:white;border:none;border-radius:10px;padding:13px;font-size:14px;font-weight:500;cursor:pointer;font-family:inherit">✅ Acepto el aviso de privacidad</button>
+        <button onclick="declinePrivacy()" style="background:none;border:none;padding:8px;font-size:13px;cursor:pointer;font-family:inherit;color:var(--muted)">No acepto — salir</button>
       </div>
     </div>
+  </div>
 
-    <div style="display:flex;flex-direction:column;gap:10px">
-      <button onclick="logout();closeProfile()" style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:12px;font-size:14px;cursor:pointer;font-family:inherit;color:var(--text)">
-        🚪 Cerrar sesión
-      </button>
-      <button onclick="confirmDeleteData()" style="background:#fde8e0;border:1px solid #f8c4b4;border-radius:10px;padding:12px;font-size:14px;cursor:pointer;font-family:inherit;color:#c84b1f;font-weight:500">
-        🗑️ Eliminar todos mis datos
-      </button>
-      <button onclick="closeProfile()" style="background:none;border:none;padding:8px;font-size:13px;cursor:pointer;font-family:inherit;color:var(--muted)">
-        Cancelar
-      </button>
+  <!-- Modal Perfil -->
+  <div id="profileModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:200;align-items:center;justify-content:center;padding:20px">
+    <div style="background:var(--surface);border-radius:20px;padding:28px;max-width:360px;width:100%">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
+        <div style="width:48px;height:48px;background:var(--accent);border-radius:50%;display:flex;align-items:center;justify-content:center;color:white;font-size:20px;font-weight:600" id="modalAvatar">G</div>
+        <div><div style="font-weight:500;font-size:15px" id="modalName">Usuario</div><div style="font-size:12px;color:var(--muted)" id="modalEmail"></div></div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <button onclick="logout();closeProfile()" style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:12px;font-size:14px;cursor:pointer;font-family:inherit;color:var(--text)">🚪 Cerrar sesión</button>
+        <button onclick="confirmDeleteData()" style="background:#fde8e0;border:1px solid #f8c4b4;border-radius:10px;padding:12px;font-size:14px;cursor:pointer;font-family:inherit;color:#c84b1f;font-weight:500">🗑️ Eliminar todos mis datos</button>
+        <button onclick="closeProfile()" style="background:none;border:none;padding:8px;font-size:13px;cursor:pointer;font-family:inherit;color:var(--muted)">Cancelar</button>
+      </div>
     </div>
   </div>
-</div>
 
-
-  
-  <!-- Mobile Nav -->
   <div class="mobile-nav">
     <button class="mobile-nav-btn active" onclick="switchTabMobile('chat', this)"><span>💬</span><span>Coach</span></button>
     <button class="mobile-nav-btn" onclick="switchTabMobile('glucose', this)"><span>📊</span><span>Glucosa</span></button>
-  <button class="mobile-nav-btn" onclick="switchTabMobile('food', this)"><span>🥗</span><span>Comidas</span></button>
+    <button class="mobile-nav-btn" onclick="switchTabMobile('food', this)"><span>🥗</span><span>Comidas</span></button>
   </div>
-
 </div>
 
 <script>
@@ -1530,7 +802,7 @@ const TOPICS = {
     title: '🥗 Alimentación',
     desc: 'Consejos personalizados de nutrición para controlar tu glucosa',
     prompts: ['¿Qué puedo desayunar?', '¿Puedo comer tortillas?', '¿Qué frutas son seguras?', 'Menú para la semana'],
-    system: 'Eres GlucoCoach, un coach especializado en alimentación para personas con diabetes. Hablas en español latinoamericano, con calidez y claridad. Das consejos prácticos sobre alimentación, índice glucémico, porciones y alternativas saludables. Siempre recomiendas consultar al médico para decisiones médicas importantes. Sé conciso pero útil.'
+    system: 'Eres GlucoCoach, coach especializado en alimentación para personas con diabetes de toda Latinoamérica. Hablas en español con calidez y claridad. Das consejos prácticos sobre alimentación, índice glucémico, porciones y alternativas saludables. Siempre recomiendas consultar al médico para decisiones médicas importantes. Sé conciso pero útil.'
   },
   glucosa: {
     title: '📊 Control de glucosa',
@@ -1559,8 +831,8 @@ const TOPICS = {
   recetas: {
     title: '👨‍🍳 Recetas saludables',
     desc: 'Comidas deliciosas y aptas para diabéticos',
-    prompts: ['Receta de desayuno rápido', 'Postre sin azúcar', 'Comida mexicana apta', 'Licuado sin elevar glucosa'],
-    system: 'Eres GlucoCoach, chef y nutriólogo especializado en diabetes para toda Latinoamérica. Propones recetas deliciosas y prácticas con ingredientes comunes en LATAM como arroz, frijoles, plátano, yuca, tortillas, maíz, quinoa, papa y más. Adaptas las recetas a distintos países latinos. Explicas el impacto glucémico de cada platillo y das sustituciones saludables. Haces que comer sano con diabetes sea placentero, no un castigo.''
+    prompts: ['Receta de desayuno rápido', 'Postre sin azúcar', 'Receta latina apta', 'Licuado sin elevar glucosa'],
+    system: 'Eres GlucoCoach, chef y nutriólogo especializado en diabetes para toda Latinoamérica. Propones recetas deliciosas con ingredientes comunes en LATAM como arroz, frijoles, plátano, yuca, tortillas, maíz, quinoa, papa y más. Adaptas las recetas a distintos países latinos. Explicas el impacto glucémico y das sustituciones saludables.'
   }
 };
 
@@ -1568,59 +840,52 @@ let currentTopic = 'alimentacion';
 let conversationHistory = [];
 let isLoading = false;
 const reminderTimers = {};
+let reminderInterval = null;
 
-// TABS
 window.switchTab = function(tab, btn) {
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
   document.getElementById('tab-' + tab).classList.add('active');
   if (btn) btn.classList.add('active');
-}
+};
 
 window.switchTabMobile = function(tab, btn) {
-  switchTab(tab, null);
+  window.switchTab(tab, null);
   document.querySelectorAll('.mobile-nav-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
-  const tabBtns = document.querySelectorAll('.tab-btn');
-  tabBtns.forEach(b => {
-    if (b.getAttribute('onclick')?.includes(tab)) b.classList.add('active');
-  });
-}
+  document.querySelectorAll('.tab-btn').forEach(b => { if (b.getAttribute('onclick')?.includes(tab)) b.classList.add('active'); });
+};
 
-// TOPIC
 window.setTopicMobile = function(btn, topic) {
   document.querySelectorAll('.chat-topic-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
-  const sidebarBtn = document.querySelector(`.topic-btn[onclick*="${topic}"]`);
-  if (sidebarBtn) setTopic(sidebarBtn, topic);
-}
-  window.setTopic = function(btn, topic) {
+  const sidebarBtn = document.querySelector('.topic-btn[onclick*="' + topic + '"]');
+  if (sidebarBtn) window.setTopic(sidebarBtn, topic);
+};
+
+window.setTopic = function(btn, topic) {
   document.querySelectorAll('.topic-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   currentTopic = topic;
   const t = TOPICS[topic];
   document.getElementById('topicTitle').textContent = t.title;
   document.getElementById('topicDesc').textContent = t.desc;
-  document.getElementById('quickPrompts').innerHTML = t.prompts.map(p => `<button class="quick-btn" onclick="sendQuick(this)">${p}</button>`).join('');
+  document.getElementById('quickPrompts').innerHTML = t.prompts.map(p => '<button class="quick-btn" onclick="sendQuick(this)">' + p + '</button>').join('');
   conversationHistory = [];
-  document.getElementById('messages').innerHTML = `
-    <div class="message ai">
-      <div class="avatar ai">G</div>
-      <div class="bubble">Cambiamos a <strong>${t.title}</strong>. ¿Qué te gustaría saber?</div>
-    </div>`;
-}
+  document.getElementById('messages').innerHTML = '<div class="message ai"><div class="avatar ai">G</div><div class="bubble">Cambiamos a <strong>' + t.title + '</strong>. ¿Qué te gustaría saber?</div></div>';
+};
 
-function sendQuick(btn) {
+window.sendQuick = function(btn) {
   document.getElementById('userInput').value = btn.textContent;
-  sendMessage();
-}
+  window.sendMessage();
+};
 
 function addMessage(role, text) {
   const msgs = document.getElementById('messages');
   const div = document.createElement('div');
-  div.className = `message ${role}`;
+  div.className = 'message ' + role;
   const av = document.createElement('div');
-  av.className = `avatar ${role}`;
+  av.className = 'avatar ' + role;
   av.textContent = role === 'ai' ? 'G' : '👤';
   const bub = document.createElement('div');
   bub.className = 'bubble';
@@ -1669,12 +934,7 @@ window.sendMessage = async function() {
     const response = await fetch('/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-5',
-        max_tokens: 1000,
-        system: TOPICS[currentTopic].system,
-        messages: conversationHistory
-      })
+      body: JSON.stringify({ model: 'claude-sonnet-4-5', max_tokens: 1000, system: TOPICS[currentTopic].system, messages: conversationHistory })
     });
     const data = await response.json();
     const reply = data.content?.map(c => c.text || '').join('') || 'Lo siento, ocurrió un error. Intenta de nuevo.';
@@ -1688,132 +948,61 @@ window.sendMessage = async function() {
   isLoading = false;
   document.getElementById('sendBtn').disabled = false;
   document.getElementById('userInput').focus();
-}
+};
 
-// REMINDERS
-async function toggleReminderCustom(btn, id, timeInputId, message) {
+window.toggleReminderCustom = async function(btn, id, timeInputId, message) {
   const timeInput = document.getElementById(timeInputId);
-  const [hour, minute] = timeInput.value.split(':').map(Number);
-
-  // Guardar hora en localStorage
-  try {
-  localStorage.setItem('glucocoach_time_' + id, timeInput.value);
-  console.log('Hora guardada:', id, timeInput.value);
-} catch(e) {
-  console.error('Error guardando hora:', e);
-}
-
+  try { localStorage.setItem('glucocoach_time_' + id, timeInput.value); } catch(e) {}
   timeInput.disabled = !btn.classList.contains('on');
+  const [hour, minute] = timeInput.value.split(':').map(Number);
   await toggleReminder(btn, id, hour, minute, message);
-}
-
-function loadSavedTimes() {
-  const reminders = ['med1', 'glu1', 'glu2', 'med2', 'eje1'];
-  reminders.forEach(id => {
-    try {
-      const saved = localStorage.getItem('glucocoach_time_' + id);
-      const input = document.getElementById('time-' + id);
-      if (saved && input) {
-        input.value = saved;
-        console.log('Cargando hora para', id, saved);
-      }
-    } catch(e) {
-      console.error('Error cargando hora:', e);
-    }
-  });
-}
+};
 
 async function toggleReminder(btn, id, hour, minute, message) {
   const isOn = btn.classList.contains('on');
-  if (isOn) {
-    btn.classList.remove('on');
-    if (reminderTimers[id]) clearInterval(reminderTimers[id]);
-    localStorage.setItem('glucocoach_active_' + id, 'false');
-    return;
-  }
-  if (!('Notification' in window)) {
-    alert('Tu navegador no soporta notificaciones.');
-    return;
-  }
+  if (isOn) { btn.classList.remove('on'); if (reminderTimers[id]) clearInterval(reminderTimers[id]); return; }
+  if (!('Notification' in window)) { alert('Tu navegador no soporta notificaciones.'); return; }
   const permission = await Notification.requestPermission();
-  if (permission !== 'granted') {
-    alert('Necesitas permitir las notificaciones para activar los recordatorios.');
-    return;
-  }
+  if (permission !== 'granted') { alert('Necesitas permitir las notificaciones.'); return; }
   btn.classList.add('on');
-  localStorage.setItem('glucocoach_active_' + id, 'true');
-  await requestNotificationToken();
-}
-  
-  
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/sw.js');
 }
 
-// Cargar horas guardadas cuando el usuario inicia sesión
-document.addEventListener('DOMContentLoaded', () => {
-  setTimeout(async () => {
-    loadSavedTimes();
-    startReminderCheck();
-    if (Notification.permission === 'granted') {
-      await requestNotificationToken();
-    }
-  }, 1500);
-});
-
-// Verificar recordatorios cada minuto
-let reminderInterval = null;
-
-async function requestNotificationToken() {
-  try {
-    const { getMessaging, getToken } = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging.js');
-    const messaging = getMessaging();
-    const token = await getToken(messaging, {
-      vapidKey: 'BBBo0G2JJmdiukRHAZbRQkb_OSBSWSvVK_ZCsIdYHS4hS6AeTbEc-kz7C4Vh-xxFDGz2KrsDm6yD1iy_wPK91iA'
-    });
-    if (token) {
-      localStorage.setItem('fcm_token', token);
-      console.log('FCM Token:', token);
-    }
-    return token;
-  } catch(e) {
-    console.error('Error obteniendo token FCM:', e);
-    return null;
-  }
+function loadSavedTimes() {
+  ['med1', 'glu1', 'glu2', 'med2', 'eje1'].forEach(id => {
+    try {
+      const saved = localStorage.getItem('glucocoach_time_' + id);
+      const input = document.getElementById('time-' + id);
+      if (saved && input) input.value = saved;
+    } catch(e) {}
+  });
 }
 
 function startReminderCheck() {
   if (reminderInterval) clearInterval(reminderInterval);
   reminderInterval = setInterval(() => {
     const now = new Date();
-    const reminders = ['med1', 'glu1', 'glu2', 'med2', 'eje1'];
-    reminders.forEach(id => {
+    ['med1', 'glu1', 'glu2', 'med2', 'eje1'].forEach(id => {
       const toggle = document.getElementById('toggle-' + id);
       if (!toggle?.classList.contains('on')) return;
       const savedTime = localStorage.getItem('glucocoach_time_' + id);
       if (!savedTime) return;
       const [h, m] = savedTime.split(':').map(Number);
-      if (now.getHours() === h && now.getMinutes() === m) {
-        const messages = {
-          med1: 'Hora de tu medicamento matutino 💊',
-          glu1: 'Mide tu glucosa en ayunas 📊',
-          glu2: 'Mide tu glucosa 2 horas después de comer 🍽️',
-          med2: 'Hora de tu medicamento nocturno 💊',
-          eje1: '¡Es hora de moverte! 🏃'
-        };
-        if (Notification.permission === 'granted') {
-          new Notification('GlucoCoach 🩺', {
-            body: messages[id],
-            icon: '/icon-192.png'
-          });
-        }
+      if (now.getHours() === h && now.getMinutes() === m && Notification.permission === 'granted') {
+        const messages = { med1: 'Hora de tu medicamento matutino 💊', glu1: 'Mide tu glucosa en ayunas 📊', glu2: 'Mide tu glucosa 2 horas después de comer 🍽️', med2: 'Hora de tu medicamento nocturno 💊', eje1: '¡Es hora de moverte! 🏃' };
+        new Notification('GlucoCoach 🩺', { body: messages[id], icon: '/icon-192.png' });
       }
     });
   }, 10000);
 }
 
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js');
 
-  
+document.addEventListener('DOMContentLoaded', () => {
+  setTimeout(() => { loadSavedTimes(); startReminderCheck(); }, 1500);
+});
 </script>
 </body>
 </html>
+
+
+
