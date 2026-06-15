@@ -13,6 +13,7 @@
 <link rel="apple-touch-icon" href="/icon-192.png">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,400;0,600;0,700;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script type="module">
   import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
   import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
@@ -149,6 +150,142 @@
     document.getElementById('sidebarGlucoseStatus').textContent = status.label;
   }
 
+async function generatePDF() {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF();
+  const readings = [];
+
+  try {
+    const { collection, query, where, orderBy, getDocs } = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js');
+    const { getFirestore } = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js');
+    const db = getFirestore();
+    const day30 = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const q = query(
+      collection(db, 'glucose_readings'),
+      where('userId', '==', currentUser.uid),
+      orderBy('timestamp', 'desc')
+    );
+    const snapshot = await getDocs(q);
+    snapshot.forEach(doc => readings.push({ id: doc.id, ...doc.data() }));
+  } catch(e) {
+    alert('Error al obtener datos. Intenta de nuevo.');
+    return;
+  }
+
+  if (readings.length === 0) {
+    alert('No tienes lecturas registradas aún.');
+    return;
+  }
+
+  // Colores
+  const GREEN = [26, 107, 60];
+  const GRAY = [120, 112, 96];
+  const BLACK = [28, 26, 22];
+
+  // Header
+  doc.setFillColor(...GREEN);
+  doc.rect(0, 0, 210, 40, 'F');
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(22);
+  doc.setFont('helvetica', 'bold');
+  doc.text('GlucoCoach', 14, 18);
+  doc.setFontSize(11);
+  doc.setFont('helvetica', 'normal');
+  doc.text('Reporte de control glucémico', 14, 26);
+  doc.text(`Generado: ${new Date().toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' })}`, 14, 33);
+  doc.text(`Paciente: ${currentUser.displayName || 'Usuario'}`, 120, 26);
+
+  // Estadísticas
+  const values = readings.map(r => r.value);
+  const avg = Math.round(values.reduce((a, b) => a + b, 0) / values.length);
+  const max = Math.max(...values);
+  const min = Math.min(...values);
+  const inRange = readings.filter(r => r.value >= 70 && r.value <= 140).length;
+  const inRangePct = Math.round((inRange / readings.length) * 100);
+
+  doc.setTextColor(...BLACK);
+  doc.setFontSize(14);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Resumen del período', 14, 55);
+
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(...GRAY);
+
+  const stats = [
+    ['Total de lecturas', readings.length],
+    ['Promedio de glucosa', `${avg} mg/dL`],
+    ['Valor máximo', `${max} mg/dL`],
+    ['Valor mínimo', `${min} mg/dL`],
+    ['Tiempo en rango (70-140)', `${inRangePct}%`],
+  ];
+
+  let y = 65;
+  stats.forEach(([label, value]) => {
+    doc.setTextColor(...GRAY);
+    doc.text(label, 14, y);
+    doc.setTextColor(...BLACK);
+    doc.setFont('helvetica', 'bold');
+    doc.text(String(value), 120, y);
+    doc.setFont('helvetica', 'normal');
+    y += 8;
+  });
+
+  // Últimas lecturas
+  y += 10;
+  doc.setTextColor(...BLACK);
+  doc.setFontSize(14);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Últimas 20 lecturas', 14, y);
+  y += 8;
+
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(...GRAY);
+  doc.text('Fecha', 14, y);
+  doc.text('Momento', 70, y);
+  doc.text('Glucosa', 130, y);
+  doc.text('Estado', 160, y);
+  y += 4;
+
+  doc.setDrawColor(...GRAY);
+  doc.line(14, y, 196, y);
+  y += 6;
+
+  doc.setFont('helvetica', 'normal');
+  readings.slice(0, 20).forEach(r => {
+    const date = r.timestamp?.toDate ? r.timestamp.toDate() : new Date(r.timestamp);
+    const dateStr = date.toLocaleDateString('es-MX', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+    const status = getGlucoseStatus(r.value, r.moment);
+
+    doc.setTextColor(...BLACK);
+    doc.text(dateStr, 14, y);
+    doc.text(r.moment || '—', 70, y);
+    doc.text(`${r.value} mg/dL`, 130, y);
+    doc.setTextColor(r.value < 70 ? 200 : r.value > 140 ? 200 : 26, r.value >= 70 && r.value <= 140 ? 107 : 50, r.value >= 70 && r.value <= 140 ? 60 : 31);
+    doc.text(status.label.replace(/[^\w\s]/gi, '').trim(), 160, y);
+    y += 7;
+
+    if (y > 270) {
+      doc.addPage();
+      y = 20;
+    }
+  });
+
+  // Footer
+  const pageCount = doc.internal.getNumberOfPages();
+  for (let i = 1; i <= pageCount; i++) {
+    doc.setPage(i);
+    doc.setFontSize(8);
+    doc.setTextColor(...GRAY);
+    doc.text('GlucoCoach — Este reporte es informativo y no reemplaza la consulta médica profesional.', 14, 290);
+    doc.text(`Página ${i} de ${pageCount}`, 180, 290);
+  }
+
+  doc.save(`glucocoach-reporte-${new Date().toISOString().slice(0,10)}.pdf`);
+}
+
+  
 function calculateStreakAndAchievements(readings) {
   if (readings.length === 0) {
     document.getElementById('streak-count').textContent = '0';
