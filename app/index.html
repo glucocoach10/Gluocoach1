@@ -41,9 +41,10 @@
       document.getElementById('mainApp').style.display = 'flex';
       document.getElementById('userName').textContent = user.displayName?.split(' ')[0] || 'Usuario';
       document.getElementById('userAvatar').textContent = user.displayName?.[0] || '👤';
-      loadGlucoseHistory();
-      loadFoodHistory();
-      checkPrivacyAccepted();
+     loadGlucoseHistory();
+loadFoodHistory();
+checkPrivacyAccepted();
+verifySubscription(user);
     } else {
       document.getElementById('loginScreen').style.display = 'flex';
       document.getElementById('mainApp').style.display = 'none';
@@ -61,6 +62,59 @@
 
   window.logout = async () => { await signOut(auth); };
 
+window.verifySubscription = async function(user) {
+  try {
+    const response = await fetch('/api/verify-subscription', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: user.uid, email: user.email })
+    });
+    const data = await response.json();
+
+    if (data.status === 'active') {
+      // Acceso completo
+      document.getElementById('subscriptionBanner')?.remove();
+      return;
+    }
+
+    if (data.status === 'trial') {
+      // Mostrar banner de días restantes
+      showTrialBanner(data.daysLeft);
+      return;
+    }
+
+    if (data.status === 'expired') {
+      // Mostrar pantalla de pago
+      showExpiredScreen();
+      return;
+    }
+  } catch(e) {
+    console.error('Error verificando suscripción:', e);
+  }
+};
+
+function showTrialBanner(daysLeft) {
+  const existing = document.getElementById('subscriptionBanner');
+  if (existing) existing.remove();
+  const banner = document.createElement('div');
+  banner.id = 'subscriptionBanner';
+  banner.style.cssText = 'background:#d97706;color:white;text-align:center;padding:8px 16px;font-size:13px;font-weight:500;position:sticky;top:60px;z-index:50;';
+  banner.innerHTML = `⏳ Te quedan <strong>${daysLeft} días</strong> de prueba gratis. <a href="https://buy.stripe.com/bJe00j7jSdaE72YbehcIE00" style="color:white;text-decoration:underline;margin-left:8px">Suscribirme ahora →</a>`;
+  document.getElementById('mainApp').insertBefore(banner, document.querySelector('.tabs'));
+}
+
+function showExpiredScreen() {
+  document.getElementById('mainApp').innerHTML = `
+    <div style="min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 20px;text-align:center;background:#f5f0e8">
+      <div style="font-size:48px;margin-bottom:16px">🔒</div>
+      <h2 style="font-family:'Fraunces',serif;font-size:28px;font-weight:700;color:#1a6b3c;margin-bottom:12px">Tu periodo de prueba terminó</h2>
+      <p style="font-size:15px;color:#7a7060;max-width:360px;line-height:1.6;margin-bottom:32px">Suscríbete para seguir accediendo a GlucoCoach y mantener el control de tu diabetes.</p>
+      <a href="https://buy.stripe.com/bJe00j7jSdaE72YbehcIE00" style="background:#1a6b3c;color:white;padding:14px 32px;border-radius:100px;font-size:15px;font-weight:500;text-decoration:none;display:inline-block;margin-bottom:16px">💳 Suscribirme por $9.99/mes</a>
+      <button onclick="logout()" style="background:none;border:none;color:#7a7060;font-size:13px;cursor:pointer;font-family:inherit">Cerrar sesión</button>
+    </div>`;
+}
+
+  
   window.acceptPrivacy = () => {
     localStorage.setItem('glucocoach_privacy_accepted', 'true');
     document.getElementById('privacyModal').style.display = 'none';
