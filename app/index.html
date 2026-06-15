@@ -43,6 +43,7 @@
       document.getElementById('userName').textContent = user.displayName?.split(' ')[0] || 'Usuario';
       document.getElementById('userAvatar').textContent = user.displayName?.[0] || '👤';
       loadGlucoseHistory();
+      loadFoodHistory();
     } else {
       document.getElementById('loginScreen').style.display = 'flex';
       document.getElementById('mainApp').style.display = 'none';
@@ -92,6 +93,123 @@
     }
   };
 
+
+let currentFoodAnalysis = null;
+
+window.analyzeFood = async function() {
+  const food = document.getElementById('foodInput').value.trim();
+  const moment = document.getElementById('foodMoment').value;
+  const portion = document.getElementById('foodPortion').value;
+
+  if (!food) {
+    alert('Por favor describe lo que comiste.');
+    return;
+  }
+
+  const btn = document.querySelector('#tab-food .btn-save');
+  btn.textContent = '🤖 Analizando...';
+  btn.disabled = true;
+
+  try {
+    const response = await fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-5',
+        max_tokens: 500,
+        system: 'Eres GlucoCoach, especialista en nutrición para diabéticos. Analiza la comida descrita y responde en español con: 1) Impacto glucémico estimado (bajo/medio/alto) 2) Por qué sube o no la glucosa 3) Un consejo práctico. Sé conciso, máximo 4 líneas. No uses markdown ni asteriscos.',
+        messages: [{ role: 'user', content: `Comí: ${food}. Porción: ${portion}. Momento: ${moment}` }]
+      })
+    });
+
+    const data = await response.json();
+    const analysis = data.content?.map(c => c.text || '').join('') || 'No se pudo analizar.';
+
+    currentFoodAnalysis = { food, moment, portion, analysis };
+
+    document.getElementById('foodAnalysisText').textContent = analysis;
+    document.getElementById('foodAnalysis').style.display = 'block';
+
+  } catch(e) {
+    alert('Error al analizar. Intenta de nuevo.');
+  }
+
+  btn.textContent = '🤖 Analizar con IA';
+  btn.disabled = false;
+};
+
+window.saveFood = async function() {
+  if (!currentFoodAnalysis || !currentUser) return;
+
+  try {
+    await addDoc(collection(db, 'food_diary'), {
+      userId: currentUser.uid,
+      ...currentFoodAnalysis,
+      timestamp: new Date()
+    });
+
+    document.getElementById('foodInput').value = '';
+    document.getElementById('foodAnalysis').style.display = 'none';
+    currentFoodAnalysis = null;
+    loadFoodHistory();
+
+    alert('✅ Comida guardada correctamente');
+  } catch(e) {
+    alert('Error al guardar. Intenta de nuevo.');
+  }
+};
+
+window.loadFoodHistory = async function() {
+  if (!currentUser) return;
+  try {
+    const q = query(
+      collection(db, 'food_diary'),
+      where('userId', '==', currentUser.uid),
+      orderBy('timestamp', 'desc'),
+      limit(20)
+    );
+    const snapshot = await getDocs(q);
+    const foods = [];
+    snapshot.forEach(d => foods.push({ id: d.id, ...d.data() }));
+    renderFoodHistory(foods);
+  } catch(e) {
+    console.error('Error cargando comidas:', e);
+  }
+};
+
+function renderFoodHistory(foods) {
+  const container = document.getElementById('foodHistory');
+  if (foods.length === 0) {
+    container.innerHTML = '<p style="color:var(--muted);font-size:13px;text-align:center;padding:20px">Aún no tienes comidas registradas.</p>';
+    return;
+  }
+
+  const impactColor = (analysis) => {
+    if (analysis?.toLowerCase().includes('alto')) return { bg: '#fde8e0', color: '#c84b1f', label: '↑ Alto' };
+    if (analysis?.toLowerCase().includes('medio')) return { bg: '#fef3c7', color: '#d97706', label: '→ Medio' };
+    return { bg: '#e8f5ed', color: '#1a6b3c', label: '↓ Bajo' };
+  };
+
+  container.innerHTML = foods.map(f => {
+    const date = f.timestamp?.toDate ? f.timestamp.toDate() : new Date(f.timestamp);
+    const dateStr = date.toLocaleDateString('es-MX', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+    const impact = impactColor(f.analysis);
+    return `
+      <div style="padding:12px 0;border-bottom:1px solid var(--border)">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">
+          <div>
+            <div style="font-size:14px;font-weight:500">${f.food}</div>
+            <div style="font-size:12px;color:var(--muted);margin-top:2px">${f.moment} · ${f.portion} · ${dateStr}</div>
+          </div>
+          <span style="font-size:11px;padding:3px 8px;border-radius:20px;background:${impact.bg};color:${impact.color};font-weight:500;white-space:nowrap;margin-left:8px">${impact.label}</span>
+        </div>
+        <div style="font-size:12px;color:var(--muted);line-height:1.5;background:var(--bg);border-radius:8px;padding:8px">${f.analysis}</div>
+      </div>`;
+  }).join('');
+}
+
+
+  
 window.generatePDF = async function() {
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF();
