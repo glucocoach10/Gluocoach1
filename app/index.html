@@ -1588,13 +1588,13 @@ function switchTabMobile(tab, btn) {
 }
 
 // TOPIC
-function setTopicMobile(btn, topic) {
+window.setTopicMobile = function(btn, topic) {
   document.querySelectorAll('.chat-topic-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   const sidebarBtn = document.querySelector(`.topic-btn[onclick*="${topic}"]`);
   if (sidebarBtn) setTopic(sidebarBtn, topic);
 }
-  function setTopic(btn, topic) {
+  window.setTopic = function(btn, topic) {
   document.querySelectorAll('.topic-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   currentTopic = topic;
