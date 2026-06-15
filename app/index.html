@@ -106,6 +106,7 @@
       snapshot.forEach(doc => readings.push({ id: doc.id, ...doc.data() }));
       renderHistory(readings);
       renderChart(readings);
+      calculateStats(readings);
       updateSidebarGlucose(readings);
     } catch(e) {
       console.error('Error loading history:', e);
@@ -147,6 +148,79 @@
     document.getElementById('sidebarGlucoseStatus').textContent = status.label;
   }
 
+function calculateStats(readings) {
+  if (readings.length === 0) return;
+
+  const now = new Date();
+  const day7 = new Date(now - 7 * 24 * 60 * 60 * 1000);
+  const day30 = new Date(now - 30 * 24 * 60 * 60 * 1000);
+
+  const readings7 = readings.filter(r => {
+    const d = r.timestamp?.toDate ? r.timestamp.toDate() : new Date(r.timestamp);
+    return d >= day7;
+  });
+
+  const readings30 = readings.filter(r => {
+    const d = r.timestamp?.toDate ? r.timestamp.toDate() : new Date(r.timestamp);
+    return d >= day30;
+  });
+
+  // Promedios
+  const avg7 = readings7.length > 0
+    ? Math.round(readings7.reduce((a, r) => a + r.value, 0) / readings7.length)
+    : null;
+
+  const avg30 = readings30.length > 0
+    ? Math.round(readings30.reduce((a, r) => a + r.value, 0) / readings30.length)
+    : null;
+
+  // Tiempo en rango (70-140)
+  const inRange = readings30.filter(r => r.value >= 70 && r.value <= 140).length;
+  const inRangePct = readings30.length > 0
+    ? Math.round((inRange / readings30.length) * 100)
+    : null;
+
+  // Tendencia
+  let trend = '→';
+  let trendColor = 'var(--muted)';
+  if (readings7.length >= 4) {
+    const half = Math.floor(readings7.length / 2);
+    const firstHalf = readings7.slice(half);
+    const secondHalf = readings7.slice(0, half);
+    const avgFirst = firstHalf.reduce((a, r) => a + r.value, 0) / firstHalf.length;
+    const avgSecond = secondHalf.reduce((a, r) => a + r.value, 0) / secondHalf.length;
+    const diff = avgSecond - avgFirst;
+    if (diff < -5) { trend = '↓ Bajando'; trendColor = '#1a6b3c'; }
+    else if (diff > 5) { trend = '↑ Subiendo'; trendColor = '#c84b1f'; }
+    else { trend = '→ Estable'; trendColor = '#d97706'; }
+  }
+
+  // Distribución
+  const total = readings30.length;
+  const low = readings30.filter(r => r.value < 70).length;
+  const normal = readings30.filter(r => r.value >= 70 && r.value <= 140).length;
+  const high = readings30.filter(r => r.value > 140).length;
+
+  const pctLow = total > 0 ? Math.round((low / total) * 100) : 0;
+  const pctNormal = total > 0 ? Math.round((normal / total) * 100) : 0;
+  const pctHigh = total > 0 ? Math.round((high / total) * 100) : 0;
+
+  // Actualizar UI
+  document.getElementById('stat-avg7').textContent = avg7 ?? '—';
+  document.getElementById('stat-avg30').textContent = avg30 ?? '—';
+  document.getElementById('stat-inrange').textContent = inRangePct !== null ? inRangePct + '%' : '—';
+  document.getElementById('stat-trend').textContent = trend;
+  document.getElementById('stat-trend').style.fontSize = '16px';
+  document.getElementById('stat-trend').style.color = trendColor;
+
+  document.getElementById('bar-normal').style.width = pctNormal + '%';
+  document.getElementById('bar-high').style.width = pctHigh + '%';
+  document.getElementById('bar-low').style.width = pctLow + '%';
+  document.getElementById('pct-normal').textContent = pctNormal + '%';
+  document.getElementById('pct-high').textContent = pctHigh + '%';
+  document.getElementById('pct-low').textContent = pctLow + '%';
+}
+ 
   function renderHistory(readings) {
     const container = document.getElementById('historyList');
     if (readings.length === 0) {
