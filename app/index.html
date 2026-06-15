@@ -105,8 +105,9 @@
       const readings = [];
       snapshot.forEach(doc => readings.push({ id: doc.id, ...doc.data() }));
       renderHistory(readings);
-      renderChart(readings);
-      calculateStats(readings);
+     renderChart(readings);
+     calculateStats(readings);
+     calculateStreakAndAchievements(readings);
       updateSidebarGlucose(readings);
     } catch(e) {
       console.error('Error loading history:', e);
@@ -148,6 +149,63 @@
     document.getElementById('sidebarGlucoseStatus').textContent = status.label;
   }
 
+function calculateStreakAndAchievements(readings) {
+  if (readings.length === 0) {
+    document.getElementById('streak-count').textContent = '0';
+    return;
+  }
+
+  // Calcular racha de días consecutivos
+  const dates = readings.map(r => {
+    const d = r.timestamp?.toDate ? r.timestamp.toDate() : new Date(r.timestamp);
+    return d.toDateString();
+  });
+  const uniqueDates = [...new Set(dates)];
+
+  let streak = 0;
+  const today = new Date();
+  for (let i = 0; i < 365; i++) {
+    const day = new Date(today);
+    day.setDate(today.getDate() - i);
+    if (uniqueDates.includes(day.toDateString())) {
+      streak++;
+    } else {
+      break;
+    }
+  }
+
+  document.getElementById('streak-count').textContent = streak;
+
+  // Logros
+  const total = readings.length;
+  const ACHIEVEMENTS = [
+    { id: 'first', icon: '🌱', name: 'Primera lectura', desc: 'Registraste tu primera glucosa', earned: total >= 1 },
+    { id: 'week', icon: '⭐', name: 'Primera semana', desc: '7 días registrando', earned: streak >= 7 },
+    { id: 'month', icon: '🥇', name: 'Un mes', desc: '30 días consecutivos', earned: streak >= 30 },
+    { id: 'readings10', icon: '📊', name: '10 lecturas', desc: 'Registraste 10 lecturas', earned: total >= 10 },
+    { id: 'readings50', icon: '💪', name: '50 lecturas', desc: 'Registraste 50 lecturas', earned: total >= 50 },
+    { id: 'readings100', icon: '🏆', name: '100 lecturas', desc: 'Registraste 100 lecturas', earned: total >= 100 },
+    { id: 'consistent', icon: '🎯', name: 'Consistente', desc: '3 días seguidos', earned: streak >= 3 },
+    { id: 'champion', icon: '👑', name: 'Campeón', desc: '60 días consecutivos', earned: streak >= 60 },
+  ];
+
+  const container = document.getElementById('achievements');
+  container.innerHTML = ACHIEVEMENTS.map(a => `
+    <div style="
+      background:${a.earned ? 'var(--accent-light)' : 'var(--bg)'};
+      border:1px solid ${a.earned ? '#b8dfc6' : 'var(--border)'};
+      border-radius:12px;padding:12px;text-align:center;
+      opacity:${a.earned ? '1' : '0.4'};
+      transition: all 0.3s;
+    ">
+      <div style="font-size:28px;margin-bottom:6px">${a.icon}</div>
+      <div style="font-size:12px;font-weight:500;color:${a.earned ? 'var(--accent)' : 'var(--text)'}">${a.name}</div>
+      <div style="font-size:11px;color:var(--muted);margin-top:2px">${a.desc}</div>
+    </div>
+  `).join('');
+}
+
+  
 function calculateStats(readings) {
   if (readings.length === 0) return;
 
