@@ -997,7 +997,7 @@ function calculateStats(readings) {
   <div class="tabs">
     <button class="tab-btn active" onclick="switchTab('chat', this)">💬 Coach IA</button>
     <button class="tab-btn" onclick="switchTab('glucose', this)">📊 Mi Glucosa</button>
-   
+   <button class="tab-btn" onclick="switchTab('food', this)">🥗 Alimentación</button>
   </div>
 
   <!-- TAB: CHAT -->
@@ -1196,6 +1196,59 @@ function calculateStats(readings) {
     </div>
   </div>
 
+<!-- TAB: ALIMENTACIÓN -->
+<div class="tab-panel" id="tab-food">
+  <div class="glucose-panel">
+
+    <!-- Registrar comida -->
+    <div class="panel-card">
+      <h3>🍽️ Registrar comida</h3>
+      <div class="form-group" style="margin-bottom:10px">
+        <label>¿Qué comiste?</label>
+        <input type="text" id="foodInput" class="form-input" placeholder="Ej: arroz con pollo y ensalada">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Momento</label>
+          <select id="foodMoment" class="form-input">
+            <option value="Desayuno">Desayuno</option>
+            <option value="Almuerzo">Almuerzo</option>
+            <option value="Comida">Comida</option>
+            <option value="Merienda">Merienda</option>
+            <option value="Cena">Cena</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Porción</label>
+          <select id="foodPortion" class="form-input">
+            <option value="Pequeña">Pequeña</option>
+            <option value="Normal">Normal</option>
+            <option value="Grande">Grande</option>
+          </select>
+        </div>
+      </div>
+      <button class="btn-save" onclick="analyzeFood()">🤖 Analizar con IA</button>
+
+      <!-- Resultado IA -->
+      <div id="foodAnalysis" style="display:none;margin-top:14px;background:var(--accent-light);border:1px solid #b8dfc6;border-radius:12px;padding:14px">
+        <div style="font-size:12px;color:var(--accent);font-weight:500;margin-bottom:6px">Análisis de GlucoCoach</div>
+        <div id="foodAnalysisText" style="font-size:13px;line-height:1.6;color:var(--text)"></div>
+        <button class="btn-save" onclick="saveFood()" style="margin-top:12px;background:var(--accent)">💾 Guardar comida</button>
+      </div>
+    </div>
+
+    <!-- Historial de comidas -->
+    <div class="panel-card">
+      <h3>📋 Historial de comidas</h3>
+      <div id="foodHistory">
+        <p style="color:var(--muted);font-size:13px;text-align:center;padding:20px">Cargando historial...</p>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+  
   <!-- TAB: RECORDATORIOS -->
   <div class="tab-panel" id="tab-reminders">
     <div class="reminder-panel">
@@ -1281,7 +1334,7 @@ function calculateStats(readings) {
   <div class="mobile-nav">
     <button class="mobile-nav-btn active" onclick="switchTabMobile('chat', this)"><span>💬</span><span>Coach</span></button>
     <button class="mobile-nav-btn" onclick="switchTabMobile('glucose', this)"><span>📊</span><span>Glucosa</span></button>
-  
+  <button class="mobile-nav-btn" onclick="switchTabMobile('food', this)"><span>🥗</span><span>Comidas</span></button>
   </div>
 
 </div>
