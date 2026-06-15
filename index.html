@@ -937,6 +937,39 @@
 <!-- FOOTER -->
 <footer>
   <p>© 2025 GlucoCoach · Hecho con ❤️ para la comunidad latina · <span>No reemplaza la atención médica profesional</span></p>
+
+<!-- Banner instalar Android -->
+<div id="installBanner" style="display:none;position:fixed;bottom:0;left:0;right:0;background:#1a6b3c;color:white;padding:16px 20px;z-index:999;align-items:center;justify-content:space-between;gap:12px;box-shadow:0 -4px 20px rgba(0,0,0,0.2)">
+  <div style="display:flex;align-items:center;gap:12px">
+    <img src="/icon-192.png" style="width:48px;height:48px;border-radius:12px;flex-shrink:0">
+    <div>
+      <div style="font-weight:600;font-size:15px">Instala GlucoCoach</div>
+      <div style="font-size:12px;opacity:0.85">Gratis · Sin App Store · En tu pantalla de inicio</div>
+    </div>
+  </div>
+  <button onclick="installApp()" style="background:white;color:#1a6b3c;border:none;border-radius:100px;padding:10px 20px;font-size:14px;font-weight:600;cursor:pointer;white-space:nowrap;font-family:inherit">
+    📲 Instalar
+  </button>
+</div>
+
+<!-- Banner instalar iOS -->
+<div id="iosBanner" style="display:none;position:fixed;bottom:0;left:0;right:0;background:#1a6b3c;color:white;padding:16px 20px;z-index:999;flex-direction:column;gap:8px;box-shadow:0 -4px 20px rgba(0,0,0,0.2)">
+  <div style="display:flex;align-items:center;justify-content:space-between">
+    <div style="display:flex;align-items:center;gap:12px">
+      <img src="/icon-192.png" style="width:48px;height:48px;border-radius:12px;flex-shrink:0">
+      <div>
+        <div style="font-weight:600;font-size:15px">Instala GlucoCoach</div>
+        <div style="font-size:12px;opacity:0.85">Gratis · Sin App Store</div>
+      </div>
+    </div>
+    <button onclick="document.getElementById('iosBanner').style.display='none'" style="background:rgba(255,255,255,0.2);border:none;color:white;padding:6px 12px;border-radius:20px;cursor:pointer;font-size:12px;font-family:inherit">✕ Cerrar</button>
+  </div>
+  <div style="background:rgba(255,255,255,0.15);border-radius:10px;padding:10px 12px;font-size:13px;line-height:1.6">
+    Toca <strong>compartir 📤</strong> en Safari y luego <strong>"Agregar a pantalla de inicio"</strong>
+  </div>
+</div>
+
+  
 </footer>
 
 <script>
