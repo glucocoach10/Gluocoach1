@@ -1,7 +1,8 @@
-import Stripe from 'stripe';
+import pkg from 'firebase-admin';
+const { credential } = pkg;
 import { initializeApp, getApps } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
-import { credential } from 'firebase-admin';
+import Stripe from 'stripe';
 
 if (!getApps().length) {
   initializeApp({
@@ -26,23 +27,31 @@ export default async function handler(req, res) {
 
   const data = event.data.object;
 
-  switch (event.type) {
-    case 'customer.subscription.created':
-    case 'invoice.payment_succeeded':
-      await db.collection('users').doc(data.customer).set({
-        subscriptionStatus: 'active',
-        subscriptionId: data.id || data.subscription,
-        updatedAt: new Date()
-      }, { merge: true });
-      break;
+  try {
+    switch (event.type) {
+      case 'customer.subscription.created':
+      case 'invoice.payment_succeeded':
+        if (data.customer) {
+          await db.collection('users').doc(data.customer).set({
+            subscriptionStatus: 'active',
+            subscriptionId: data.id || data.subscription,
+            updatedAt: new Date()
+          }, { merge: true });
+        }
+        break;
 
-    case 'customer.subscription.deleted':
-    case 'invoice.payment_failed':
-      await db.collection('users').doc(data.customer).set({
-        subscriptionStatus: 'inactive',
-        updatedAt: new Date()
-      }, { merge: true });
-      break;
+      case 'customer.subscription.deleted':
+      case 'invoice.payment_failed':
+        if (data.customer) {
+          await db.collection('users').doc(data.customer).set({
+            subscriptionStatus: 'inactive',
+            updatedAt: new Date()
+          }, { merge: true });
+        }
+        break;
+    }
+  } catch(e) {
+    console.error('Firestore error:', e);
   }
 
   res.status(200).json({ received: true });
