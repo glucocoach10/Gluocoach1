@@ -9,9 +9,5 @@
     "api/stripe-webhook.js": {
       "maxDuration": 30
     }
-  },
-  "rewrites": [
-    { "source": "/privacidad", "destination": "/privacidad/index.html" },
-    { "source": "/app", "destination": "/app/index.html" }
-  ]
+  }
 }
