@@ -115,10 +115,26 @@ function showExpiredScreen() {
 }
 
   
-  window.acceptPrivacy = () => {
-    localStorage.setItem('glucocoach_privacy_accepted', 'true');
-    document.getElementById('privacyModal').style.display = 'none';
-  };
+ window.acceptPrivacy = async () => {
+  localStorage.setItem('glucocoach_privacy_accepted', 'true');
+  document.getElementById('privacyModal').style.display = 'none';
+  
+  if (currentUser) {
+    try {
+      const { getFirestore, doc, setDoc } = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js');
+      const db = getFirestore();
+      await setDoc(doc(db, 'privacy_acceptance', currentUser.uid), {
+        userId: currentUser.uid,
+        email: currentUser.email,
+        acceptedAt: new Date(),
+        version: '1.0',
+        ip: 'client'
+      }, { merge: true });
+    } catch(e) {
+      console.error('Error guardando aceptación:', e);
+    }
+  }
+};
 
   window.declinePrivacy = () => {
     document.getElementById('privacyModal').style.display = 'none';
