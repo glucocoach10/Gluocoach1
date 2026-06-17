@@ -8,6 +8,9 @@
     },
     "api/stripe-webhook.js": {
       "maxDuration": 30
+    },
+    "api/customer-portal.js": {
+      "maxDuration": 30
     }
   }
 }
