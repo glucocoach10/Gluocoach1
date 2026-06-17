@@ -161,34 +161,29 @@ function showExpiredScreen() {
 
 window.manageSubscription = async () => {
   try {
-    const userRef = doc(db, 'users', currentUser.uid);
     const userSnap = await getDocs(query(collection(db, 'users'), where('userId', '==', currentUser.uid)));
-
     let customerId = null;
     userSnap.forEach(d => { customerId = d.data().stripeCustomerId; });
-
     if (!customerId) {
       alert('No encontramos tu suscripción activa. Si ya pagaste, contáctanos a glucocoach10@gmail.com');
       return;
     }
-
     const response = await fetch('/api/customer-portal', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ customerId })
     });
     const data = await response.json();
-
     if (data.url) {
       window.location.href = data.url;
     } else {
       alert('Error al abrir el portal de gestión.');
     }
   } catch(e) {
+    console.error(e);
     alert('Error al cargar tu suscripción. Intenta de nuevo.');
   }
 };
-
   
   window.confirmDeleteData = async () => {
     const confirmed = confirm('¿Estás seguro? Se eliminarán TODOS tus registros. Esta acción no se puede deshacer.');
