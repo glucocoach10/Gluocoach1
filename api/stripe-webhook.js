@@ -13,26 +13,35 @@ if (!getApps().length) {
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 const db = getFirestore();
 
+function getRawBody(req) {
+  return new Promise((resolve, reject) => {
+    let data = '';
+    req.on('data', chunk => { data += chunk; });
+    req.on('end', () => resolve(data));
+    req.on('error', reject);
+  });
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end();
 
   const sig = req.headers['stripe-signature'];
-  let event;
+  const rawBody = await getRawBody(req);
 
+  let event;
   try {
-    event = stripe.webhooks.constructEvent(req.body, sig, process.env.STRIPE_WEBHOOK_SECRET);
+    event = stripe.webhooks.constructEvent(rawBody, sig, process.env.STRIPE_WEBHOOK_SECRET);
   } catch (err) {
     console.error('Webhook signature error:', err.message);
     return res.status(400).send(`Webhook Error: ${err.message}`);
   }
-  console.log('Evento recibido:', event.type);
 
+  console.log('Evento recibido:', event.type);
   const data = event.data.object;
 
   try {
     let email = data.customer_email || data.customer_details?.email;
 
-    // Si no viene el email directo, lo buscamos en el customer de Stripe
     if (!email && data.customer) {
       const customer = await stripe.customers.retrieve(data.customer);
       email = customer.email;
