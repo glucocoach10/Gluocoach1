@@ -3,6 +3,7 @@ const { credential } = pkg;
 import { initializeApp, getApps } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 import Stripe from 'stripe';
+import { buffer } from 'node:stream/consumers';
 
 if (!getApps().length) {
   initializeApp({
@@ -13,20 +14,11 @@ if (!getApps().length) {
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 const db = getFirestore();
 
-function getRawBody(req) {
-  return new Promise((resolve, reject) => {
-    let data = '';
-    req.on('data', chunk => { data += chunk; });
-    req.on('end', () => resolve(data));
-    req.on('error', reject);
-  });
-}
-
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end();
 
   const sig = req.headers['stripe-signature'];
-  const rawBody = await getRawBody(req);
+  const rawBody = await buffer(req);
 
   let event;
   try {
