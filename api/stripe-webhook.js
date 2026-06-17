@@ -28,30 +28,52 @@ export default async function handler(req, res) {
   const data = event.data.object;
 
   try {
+    let email = data.customer_email || data.customer_details?.email;
+
+    // Si no viene el email directo, lo buscamos en el customer de Stripe
+    if (!email && data.customer) {
+      const customer = await stripe.customers.retrieve(data.customer);
+      email = customer.email;
+    }
+
+    if (!email) {
+      console.log('No se encontró email para este evento:', event.type);
+      return res.status(200).json({ received: true, warning: 'no email found' });
+    }
+
+    const usersSnap = await db.collection('users').where('email', '==', email).get();
+
+    if (usersSnap.empty) {
+      console.log('No se encontró usuario con email:', email);
+      return res.status(200).json({ received: true, warning: 'user not found' });
+    }
+
+    const userDoc = usersSnap.docs[0];
+
     switch (event.type) {
+      case 'checkout.session.completed':
       case 'customer.subscription.created':
       case 'invoice.payment_succeeded':
-        if (data.customer) {
-          await db.collection('users').doc(data.customer).set({
-            subscriptionStatus: 'active',
-            subscriptionId: data.id || data.subscription,
-            updatedAt: new Date()
-          }, { merge: true });
-        }
+        await userDoc.ref.update({
+          subscriptionStatus: 'active',
+          subscriptionId: data.id || data.subscription || null,
+          stripeCustomerId: data.customer || null,
+          updatedAt: new Date()
+        });
+        console.log('Usuario activado:', email);
         break;
 
       case 'customer.subscription.deleted':
       case 'invoice.payment_failed':
-        if (data.customer) {
-          await db.collection('users').doc(data.customer).set({
-            subscriptionStatus: 'inactive',
-            updatedAt: new Date()
-          }, { merge: true });
-        }
+        await userDoc.ref.update({
+          subscriptionStatus: 'inactive',
+          updatedAt: new Date()
+        });
+        console.log('Usuario desactivado:', email);
         break;
     }
   } catch(e) {
-    console.error('Firestore error:', e);
+    console.error('Error procesando webhook:', e);
   }
 
   res.status(200).json({ received: true });
