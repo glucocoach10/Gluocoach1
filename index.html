@@ -969,9 +969,9 @@
   </div>
 </div>
 
-  
 </footer>
 
+<script>
 // Sistema de afiliados
 function captureReferral() {
   const urlParams = new URLSearchParams(window.location.search);
@@ -983,9 +983,12 @@ function captureReferral() {
 }
 captureReferral();
 
+let deferredPrompt;
+const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+const isInStandaloneMode = window.matchMedia('(display-mode: standalone)').matches;  
+
 
   
-<script>
 let deferredPrompt;
 const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
 const isInStandaloneMode = window.matchMedia('(display-mode: standalone)').matches;
