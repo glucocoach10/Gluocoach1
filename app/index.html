@@ -17,8 +17,7 @@
 <script type="module">
   import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
   import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
-  import { getFirestore, collection, addDoc, getDocs, query, where, orderBy, limit, deleteDoc, doc as firestoreDoc } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
-
+  import { getFirestore, collection, addDoc, getDocs, getDoc, updateDoc, query, where, orderBy, limit, deleteDoc, doc as firestoreDoc } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
   const firebaseConfig = {
     apiKey: "AIzaSyDfwVmBY7Td5C7LwCUY6YvI_OVcp2Q5vYk",
     authDomain: "glucocoach-29151.firebaseapp.com",
@@ -41,10 +40,12 @@
       document.getElementById('mainApp').style.display = 'flex';
       document.getElementById('userName').textContent = user.displayName?.split(' ')[0] || 'Usuario';
       document.getElementById('userAvatar').textContent = user.displayName?.[0] || '👤';
-     loadGlucoseHistory();
+loadGlucoseHistory();
 loadFoodHistory();
 checkPrivacyAccepted();
 verifySubscription(user);
+saveReferralIfNew(user);
+     
     } else {
       document.getElementById('loginScreen').style.display = 'flex';
       document.getElementById('mainApp').style.display = 'none';
@@ -61,7 +62,22 @@ verifySubscription(user);
   };
 
   window.logout = async () => { await signOut(auth); };
-
+  
+async function saveReferralIfNew(user) {
+  try {
+    const ref = localStorage.getItem('glucocoach_ref');
+    if (!ref) return;
+    const userRef = firestoreDoc(db, 'users', user.uid);
+    const userSnap = await getDoc(userRef);
+    if (userSnap.exists() && !userSnap.data().referral) {
+      await updateDoc(userRef, { referral: ref });
+      console.log('Referido guardado en Firestore:', ref);
+    }
+  } catch(e) {
+    console.error('Error guardando referido:', e);
+  }
+}
+  
 window.verifySubscription = async function(user) {
   try {
     const response = await fetch('/api/verify-subscription', {
