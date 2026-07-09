@@ -126,16 +126,33 @@ if (Object.keys(referrals).length === 0) {
   referralContainer.innerHTML = Object.entries(referrals)
     .sort((a, b) => b[1] - a[1])
     .map(([ref, count]) => {
-      const commission = (count * COMMISSION_PER_USER).toFixed(2);
+      const paying = users.filter(u => u.referral === ref && u.subscriptionStatus === 'active').length;
+      const trial = users.filter(u => u.referral === ref && u.subscriptionStatus === 'trial').length;
+      const commission = (paying * COMMISSION_PER_USER).toFixed(2);
       return `
-        <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid var(--border)">
-          <div>
-            <div style="font-size:14px;font-weight:500">@${ref}</div>
-            <div style="font-size:12px;color:var(--muted);margin-top:2px">Link: micoachdiabetes.com?ref=${ref}</div>
+        <div style="padding:14px 0;border-bottom:1px solid var(--border)">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
+            <div>
+              <div style="font-size:14px;font-weight:500">@${ref}</div>
+              <div style="font-size:12px;color:var(--muted);margin-top:2px">micoachdiabetes.com?ref=${ref}</div>
+            </div>
+            <div style="text-align:right">
+              <div style="font-size:13px;font-weight:500;color:#d97706">Comisión: $${commission} USD</div>
+            </div>
           </div>
-          <div style="text-align:right">
-            <div style="font-family:'Fraunces',serif;font-size:22px;font-weight:700;color:var(--accent)">${count} usuarios</div>
-            <div style="font-size:13px;font-weight:500;color:#d97706;margin-top:2px">Comisión: $${commission} USD</div>
+          <div style="display:flex;gap:10px">
+            <div style="background:var(--accent-light);border:1px solid #b8dfc6;border-radius:8px;padding:6px 12px;text-align:center;flex:1">
+              <div style="font-family:'Fraunces',serif;font-size:20px;font-weight:700;color:var(--accent)">${count}</div>
+              <div style="font-size:11px;color:var(--muted)">Total registros</div>
+            </div>
+            <div style="background:#e8f5ed;border:1px solid #b8dfc6;border-radius:8px;padding:6px 12px;text-align:center;flex:1">
+              <div style="font-family:'Fraunces',serif;font-size:20px;font-weight:700;color:#1a6b3c">${paying}</div>
+              <div style="font-size:11px;color:var(--muted)">Pagando 💰</div>
+            </div>
+            <div style="background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;padding:6px 12px;text-align:center;flex:1">
+              <div style="font-family:'Fraunces',serif;font-size:20px;font-weight:700;color:#d97706">${trial}</div>
+              <div style="font-size:11px;color:var(--muted)">En prueba ⏳</div>
+            </div>
           </div>
         </div>`;
     }).join('');
