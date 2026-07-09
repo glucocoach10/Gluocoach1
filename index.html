@@ -981,18 +981,13 @@ function captureReferral() {
     console.log('Referido guardado:', ref);
   }
 }
+
 captureReferral();
-
-let deferredPrompt;
-const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
-const isInStandaloneMode = window.matchMedia('(display-mode: standalone)').matches;  
-
-
-  
 let deferredPrompt;
 const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
 const isInStandaloneMode = window.matchMedia('(display-mode: standalone)').matches;
 
+  
 // Banner de instalación
 function showInstallBanner() {
   const banner = document.getElementById('installBanner');
