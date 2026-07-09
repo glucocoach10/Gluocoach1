@@ -118,23 +118,27 @@ users.forEach(u => {
   }
 });
 
+const COMMISSION_PER_USER = 2.00;
 const referralContainer = document.getElementById('referralStats');
 if (Object.keys(referrals).length === 0) {
   referralContainer.innerHTML = '<p style="color:var(--muted);font-size:13px">Aún no hay usuarios referidos.</p>';
 } else {
   referralContainer.innerHTML = Object.entries(referrals)
     .sort((a, b) => b[1] - a[1])
-    .map(([ref, count]) => `
-      <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border)">
-        <div>
-          <div style="font-size:14px;font-weight:500">@${ref}</div>
-          <div style="font-size:12px;color:var(--muted)">Link: micoachdiabetes.com?ref=${ref}</div>
-        </div>
-        <div style="text-align:right">
-          <div style="font-family:'Fraunces',serif;font-size:24px;font-weight:700;color:var(--accent)">${count}</div>
-          <div style="font-size:11px;color:var(--muted)">usuarios</div>
-        </div>
-      </div>`).join('');
+    .map(([ref, count]) => {
+      const commission = (count * COMMISSION_PER_USER).toFixed(2);
+      return `
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid var(--border)">
+          <div>
+            <div style="font-size:14px;font-weight:500">@${ref}</div>
+            <div style="font-size:12px;color:var(--muted);margin-top:2px">Link: micoachdiabetes.com?ref=${ref}</div>
+          </div>
+          <div style="text-align:right">
+            <div style="font-family:'Fraunces',serif;font-size:22px;font-weight:700;color:var(--accent)">${count} usuarios</div>
+            <div style="font-size:13px;font-weight:500;color:#d97706;margin-top:2px">Comisión: $${commission} USD</div>
+          </div>
+        </div>`;
+    }).join('');
 }
       
       const sorted = [...users].sort((a, b) => {
