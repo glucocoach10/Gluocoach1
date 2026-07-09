@@ -110,6 +110,33 @@
 
       // Lista usuarios
       const usersContainer = document.getElementById('usersList');
+      // Estadísticas de referidos
+const referrals = {};
+users.forEach(u => {
+  if (u.referral) {
+    referrals[u.referral] = (referrals[u.referral] || 0) + 1;
+  }
+});
+
+const referralContainer = document.getElementById('referralStats');
+if (Object.keys(referrals).length === 0) {
+  referralContainer.innerHTML = '<p style="color:var(--muted);font-size:13px">Aún no hay usuarios referidos.</p>';
+} else {
+  referralContainer.innerHTML = Object.entries(referrals)
+    .sort((a, b) => b[1] - a[1])
+    .map(([ref, count]) => `
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border)">
+        <div>
+          <div style="font-size:14px;font-weight:500">@${ref}</div>
+          <div style="font-size:12px;color:var(--muted)">Link: micoachdiabetes.com?ref=${ref}</div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-family:'Fraunces',serif;font-size:24px;font-weight:700;color:var(--accent)">${count}</div>
+          <div style="font-size:11px;color:var(--muted)">usuarios</div>
+        </div>
+      </div>`).join('');
+}
+      
       const sorted = [...users].sort((a, b) => {
         const dateA = a.createdAt?.toDate ? a.createdAt.toDate() : new Date(a.createdAt || 0);
         const dateB = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(b.createdAt || 0);
@@ -301,6 +328,12 @@
       </div>
     </div>
 
+<!-- Referidos -->
+<div class="panel">
+  <h3>🤝 Afiliados y referidos</h3>
+  <div id="referralStats">Cargando...</div>
+</div>
+    
     <!-- Alertas -->
     <div class="panel">
       <h3>⚠️ Usuarios por vencer (próximos 2 días)</h3>
