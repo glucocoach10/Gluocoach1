@@ -972,6 +972,19 @@
   
 </footer>
 
+// Sistema de afiliados
+function captureReferral() {
+  const urlParams = new URLSearchParams(window.location.search);
+  const ref = urlParams.get('ref');
+  if (ref) {
+    localStorage.setItem('glucocoach_ref', ref);
+    console.log('Referido guardado:', ref);
+  }
+}
+captureReferral();
+
+
+  
 <script>
 let deferredPrompt;
 const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
