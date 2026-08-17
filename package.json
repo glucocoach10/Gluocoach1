@@ -1,7 +1,7 @@
 {
   "type": "module",
   "engines": {
-    "node": "20.x"
+    "node": "24.x"
   },
   "dependencies": {
     "stripe": "^14.0.0",
