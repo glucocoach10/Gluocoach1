@@ -38,6 +38,8 @@
     if (user) {
       document.getElementById('loginScreen').style.display = 'none';
       document.getElementById('mainApp').style.display = 'flex';
+      // Meta Pixel — registro de usuario
+if (typeof fbq !== 'undefined') fbq('track', 'Lead');
       document.getElementById('userName').textContent = user.displayName?.split(' ')[0] || 'Usuario';
       document.getElementById('userAvatar').textContent = user.displayName?.[0] || '👤';
 loadGlucoseHistory();
@@ -191,6 +193,8 @@ window.manageSubscription = async () => {
     });
     const data = await response.json();
     if (data.url) {
+     // Meta Pixel — intento de suscripción
+if (typeof fbq !== 'undefined') fbq('track', 'InitiateCheckout');
       window.location.href = data.url;
     } else {
       alert('Error al abrir el portal de gestión.');
