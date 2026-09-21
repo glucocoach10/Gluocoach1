@@ -73,7 +73,7 @@
       const active = users.filter(u => u.subscriptionStatus === 'active').length;
       const trial = users.filter(u => u.subscriptionStatus === 'trial').length;
       const expired = users.filter(u => u.subscriptionStatus === 'expired' || u.subscriptionStatus === 'inactive').length;
-      const revenue = active * 9.99;
+      const revenue = active * 4.99;
 
       // Alertas — usuarios que expiran en 2 días
       const expiringSoon = users.filter(u => {
